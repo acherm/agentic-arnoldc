@@ -1,8 +1,10 @@
-# Agentic ArnoldC: 25 Challenges + a Brainfuck Interpreter in an Esoteric Language
+# Agentic ArnoldC
 
-**All 25 programs were written, compiled, and verified by AI agents (Claude) using the [ArnoldC](https://github.com/lhartikk/ArnoldC) esoteric programming language** -- a language where every keyword is an Arnold Schwarzenegger movie quote.
+25 programming challenges, a Brainfuck interpreter, and an automated test suite -- all in **[ArnoldC](https://github.com/lhartikk/ArnoldC)**, the esoteric programming language where every keyword is an Arnold Schwarzenegger movie quote.
 
-> "IT'S SHOWTIME" = begin program. "YOU HAVE BEEN TERMINATED" = end program. "TALK TO THE HAND" = print. You get the idea.
+Everything was written, compiled, debugged, and verified by AI agents (Claude) in a single conversation.
+
+> `IT'S SHOWTIME` = begin program. `YOU HAVE BEEN TERMINATED` = end program. `TALK TO THE HAND` = print. You get the idea.
 
 ## What is ArnoldC?
 
@@ -34,6 +36,17 @@ ArnoldC is an imperative programming language that compiles to JVM bytecode. Its
 | `I'LL BE BACK x` | Return x |
 | `HASTA LA VISTA, BABY` | End method |
 | `DO IT NOW f` | Call method f |
+
+## Repository Contents
+
+```
+.
+├── challenge01.arnoldc .. challenge25.arnoldc   # 25 programming challenges
+├── brainfuck.arnoldc                            # BF interpreter (generated)
+├── generate_bf_interpreter.py                   # Python generator for BF interpreter
+├── test_bf.py                                   # Automated test suite (38 tests)
+└── README.md
+```
 
 ## The 25 Challenges
 
@@ -77,11 +90,170 @@ ArnoldC is an imperative programming language that compiles to JVM bytecode. Its
 | 24 | Digital Clock Tick | [`challenge24.arnoldc`](challenge24.arnoldc) | Advance time by one second | 23:59:59 &rarr; 0:0:0 |
 | 25 | Caesar Cipher | [`challenge25.arnoldc`](challenge25.arnoldc) | Shift ASCII codes by k | shift 3, CODE &rarr; FRGH |
 
-## Running the Programs
+**25/25 PASS** -- all compiled and verified with the actual ArnoldC compiler.
+
+## Capstone: Brainfuck Interpreter in ArnoldC
+
+[`brainfuck.arnoldc`](brainfuck.arnoldc) is an ArnoldC program that **interprets and executes Brainfuck programs**. It simulates an entire programming language inside an esoteric language that has no arrays, no strings, and only `println` for output.
+
+### Architecture
+
+The interpreter faces a fundamental problem: ArnoldC has no arrays. The solution uses **individual variables as simulated arrays** with method-based dispatch:
+
+| Component | Implementation |
+|-----------|---------------|
+| Memory tape | Individual cell variables (`c0`-`cN`), accessed via `tapeRead`/`tapeWrite` methods |
+| BF program | **Hardcoded constants** in the `fetch` method body (avoids ArnoldC's 100-local-variable limit) |
+| Data pointer | Single variable `dp` |
+| Instruction pointer | Single variable `ip` |
+| Bracket matching | Runtime depth-counting scan using the `fetch` method |
+
+Three methods simulate array access:
+- `fetch(idx)` -- returns the instruction at position `idx`; instructions are hardcoded as constants in the if/else chain, so program size is effectively unlimited
+- `tapeRead(idx, c0, c1, ..., cN)` -- returns the cell value at position `idx` via parameter passing
+- `tapeWrite(targetIdx, cellIdx, oldVal, newVal)` -- returns `newVal` if indices match, `oldVal` otherwise
+
+### BF Instruction Encoding
+
+| BF | Code | BF | Code |
+|----|------|----|------|
+| `>` | 1 | `.` | 5 |
+| `<` | 2 | `,` | 6 |
+| `+` | 3 | `[` | 7 |
+| `-` | 4 | `]` | 8 |
+| (end) | 0 | | |
+
+### Execution Model
+
+- **Tape:** Auto-sized per program, unbounded integers, initialized to 0
+- **Program size:** Effectively unlimited (instructions are hardcoded constants, not variables)
+- **Output:** Numeric (prints cell value as integer)
+- **Brackets:** Matched at runtime via forward/backward scanning with nesting depth tracking
+- **Input (`,`):** Not supported
+- **Post-execution:** Dumps full tape state and data pointer for verification
+
+### How to Use
+
+```bash
+# Use the generator (auto-sizes tape and program):
+python3 -c "
+from generate_bf_interpreter import generate
+generate('+++++.', output_path='my_program.arnoldc')
+"
+java -jar ArnoldC.jar my_program.arnoldc
+java my_program
+
+# Hello World:
+python3 -c "
+from generate_bf_interpreter import generate
+hw = '++++++++++[>+++++++>++++++++++>+++>+<<<<-]>++.>+.+++++++..+++.>++.<<+++++++++++++++.>.+++.------.--------.>+.>.'
+generate(hw, output_path='hello.arnoldc')
+"
+java -jar ArnoldC.jar hello.arnoldc && java hello
+# Output: 72 101 108 108 111 32 87 111 114 108 100 33 10  (= "Hello World!\n")
+```
+
+### Why This Is Hard
+
+This program doesn't just solve a computation -- it **simulates another programming language**. In a language with no arrays, no strings, no random access, and no `print` without newline, it:
+
+- Manually represents and updates a memory tape via individual variables
+- Hardcodes BF instructions as constants in a method's if/else chain
+- Dispatches 7 instruction types via sequential equality checks
+- Implements nested bracket matching with depth-counting forward/backward scans
+- Uses a 4-parameter `tapeWrite` method called N times per write to conditionally update exactly one cell
+
+The result: **a working, tested interpreter for a Turing-complete language, written entirely in Arnold Schwarzenegger quotes.**
+
+## Test Suite
+
+The BF interpreter is verified against the reference [`brainfuck`](https://github.com/fabianishere/brainfuck) interpreter (v2.7.3) using [`test_bf.py`](test_bf.py), an automated test harness.
+
+### How It Works
+
+For each test case, the harness:
+
+1. Runs the BF program through the **reference** `brainfuck` interpreter (outputs raw bytes)
+2. **Generates** an ArnoldC interpreter with the BF program embedded (`generate_bf_interpreter.py`)
+3. **Compiles** the generated `.arnoldc` file to JVM bytecode
+4. **Runs** the ArnoldC interpreter (outputs one integer per line)
+5. **Compares** outputs: reference bytes are converted to int lists, ArnoldC output lines are parsed as ints, and values are compared with `% 256` normalization
+
+### Running the Tests
+
+```bash
+python3 test_bf.py           # run all 38 tests
+python3 test_bf.py -v        # verbose output (shows decoded ASCII)
+python3 test_bf.py -k hello  # filter tests by name
+```
+
+### Test Results: 38/38 PASS
+
+```
+============================================================
+BF Interpreter Test Suite (38 tests)
+============================================================
+
+  [PASS] empty_program
+  [PASS] print_zero
+  [PASS] single_inc_print
+  [PASS] five_incs
+  [PASS] inc_dec
+  [PASS] move_right_print
+  [PASS] move_left_print
+  [PASS] multi_cell_print
+  [PASS] zigzag_print
+  [PASS] multiply_3x2
+  [PASS] add_3_5
+  [PASS] clear_cell
+  [PASS] skip_loop_zero
+  [PASS] countdown_print
+  [PASS] double_loop
+  [PASS] nested_2x2x2
+  [PASS] nested_3x3x3
+  [PASS] multiply_4x7
+  [PASS] multiply_5x2
+  [PASS] print_A
+  [PASS] print_zero_char
+  [PASS] print_newline
+  [PASS] only_moves
+  [PASS] loop_at_start_skip
+  [PASS] nested_skip
+  [PASS] back_to_back_loops
+  [PASS] hello_world                   <-- 111 BF instructions
+  [PASS] add_digits
+  [PASS] alphabet_ABC
+  [PASS] multiply_6x7_print
+  [PASS] squares_1_to_5
+  [PASS] cell_copy
+  [PASS] print_ABCDEFG
+  [PASS] powers_of_2
+  [PASS] double_value
+  [PASS] tape_setup_4_cells
+  [PASS] tape_after_loop
+  [PASS] tape_swap
+
+Results: 38 passed, 0 failed, 0 errors, 0 skipped
+```
+
+### Test Categories
+
+| Category | # | What is tested |
+|----------|---|---------------|
+| Trivial | 5 | empty program, print zero, increment, decrement |
+| Pointer movement | 4 | `>`, `<`, zigzag, multi-cell prints |
+| Simple loops | 6 | multiply, add, clear `[-]`, skip `[` on zero, countdown |
+| Nested loops | 4 | 2\*2\*2=8, 3\*3\*3=27, 4\*7=28, 5\*2=10 |
+| ASCII output | 3 | print `A` (65), `0` (48), newline (10) |
+| Edge cases | 4 | only moves, loop-at-start skip, nested bracket skip, back-to-back loops |
+| Real-world | 7 | **Hello World** (111 instr), ABCDEFG, ASCII digits, powers of 2, squares, cell copy |
+| Tape verification | 4 | cell setup, post-loop state, swap, double |
+
+## Running the 25 Challenges
 
 ### Prerequisites
 
-- Java 8+ (the compiler generates JVM bytecode)
+- Java 8+
 - The ArnoldC compiler JAR:
 
 ```bash
@@ -122,7 +294,7 @@ echo "7"    | java challenge21   # expect: 13
 ## Lessons Learned About ArnoldC
 
 ### 1. The Read Statement is a 3-Line Incantation
-The documented single-line `I WANT TO ASK YOU A BUNCH OF QUESTIONS AND I WANT TO HAVE THEM ANSWERED IMMEDIATELY var` doesn't work in the actual compiler. Instead, reading from stdin requires:
+The documented single-line `I WANT TO ASK YOU A BUNCH OF QUESTIONS AND I WANT TO HAVE THEM ANSWERED IMMEDIATELY var` doesn't work in the actual compiler. Reading from stdin requires:
 ```
 GET YOUR ASS TO MARS variable
 DO IT NOW
@@ -136,10 +308,11 @@ I WANT TO ASK YOU A BUNCH OF QUESTIONS AND I WANT TO HAVE THEM ANSWERED IMMEDIAT
 Declaring variables (`HEY CHRISTMAS TREE`) inside `BECAUSE I'M GOING TO SAY PLEASE` blocks or nested `STICK AROUND` loops can produce JVM bytecode with inconsistent stackmap frames. **Solution:** declare all variables at the top of the scope.
 
 ### 4. No Same-Line Printing
-`TALK TO THE HAND` maps to Java's `System.out.println()` -- there is no `print()` equivalent. This means you cannot print two values on the same line. Workarounds used:
+`TALK TO THE HAND` maps to Java's `System.out.println()` -- there is no `print()` equivalent. You cannot print two values on the same line. Workarounds used:
 - **Staircase (14):** Print numbers made of 1s (1, 11, 111, 1111)
 - **Histogram (23):** Print label then count of 1s on separate lines
 - **Caesar cipher (25):** Output shifted ASCII codes as integers
+- **BF interpreter:** Output cell values as integers instead of characters
 
 ### 5. No `<=` Operator
 ArnoldC only has `>` (`LET OFF SOME STEAM BENNET`) and `==` (`YOU ARE NOT YOU YOU ARE ME`). To check `i <= n`, compute `(n + 1) > i`. To negate a boolean, compute `1 - value`.
@@ -147,147 +320,20 @@ ArnoldC only has `>` (`LET OFF SOME STEAM BENNET`) and `==` (`YOU ARE NOT YOU YO
 ### 6. Recursion Works
 Methods compile to JVM methods, so recursive calls (challenge 21 -- Fibonacci) work naturally via the JVM call stack.
 
-### 7. The Tiny VM is Peak ArnoldC
-Challenge 22 implements an interpreter *inside* an esoteric language. The VM supports 6 opcodes (PUSH, ADD, SUB, MUL, PRINT, HALT) using a chain of equality checks -- essentially a switch-case built from `YOU ARE NOT YOU YOU ARE ME`.
+### 7. Hard Limit: 100 Local Variables Per Method
+ArnoldC's bytecode generator breaks when a method has more than **100 local variables** (parameters + declared variables). At exactly 101 locals, compilation succeeds but the JVM rejects the class with `StackMapTable format error` or `Arguments can't fit into locals`. This was discovered while building the BF interpreter: storing 111 program slots as main-method variables failed. **Solution:** hardcode program data as constants inside a method's if/else chain, removing the variables entirely.
+
+### 8. The Tiny VM is Peak ArnoldC
+Challenge 22 implements a virtual machine *inside* an esoteric language. The VM supports 6 opcodes (PUSH, ADD, SUB, MUL, PRINT, HALT) using a chain of equality checks -- essentially a switch-case built from `YOU ARE NOT YOU YOU ARE ME`.
 
 ## How This Was Made
 
-All 25 programs were generated by **Claude (Anthropic)** in a single conversation:
-1. Five parallel AI agents each tackled a batch of 5 challenges
-2. Each agent wrote the `.arnoldc` source, compiled it with the real compiler, and verified outputs
-3. Compilation errors were debugged iteratively (notably: the read syntax, variable scoping, and boolean literal issues)
+All programs were generated by **Claude (Anthropic)** in a single conversation:
 
-The entire process -- from challenge specification to 25 working, tested programs -- was completed in one shot.
-
-## Test Results
-
-```
-Challenge 01 (Sum 1 to N)           PASS    echo "5"    -> 15
-Challenge 02 (Countdown)            PASS    echo "4"    -> 4,3,2,1,0
-Challenge 03 (Even or Odd)          PASS    echo "7"    -> ODD
-Challenge 04 (Max of Two)           PASS    12,9        -> 12
-Challenge 05 (Absolute Value)       PASS    echo "-8"   -> 8
-Challenge 06 (Multiplication Table) PASS    echo "3"    -> 3,6,...,30
-Challenge 07 (Power of Two)         PASS    echo "4"    -> 1,2,4,8,16
-Challenge 08 (Multiply w/o *)       PASS    4,3         -> 12
-Challenge 09 (Integer Average)      PASS    7,10        -> 8
-Challenge 10 (Sum of Digits)        PASS    echo "527"  -> 14
-Challenge 11 (Total Counter)        PASS    3,4,2,5,1,6 -> 21
-Challenge 12 (Largest Category)     PASS    3,9,2,5,1,6 -> B
-Challenge 13 (Vending Machine)      PASS    echo "68"   -> 2Q,1D,1N,3P
-Challenge 14 (Staircase)            PASS    echo "4"    -> 1,11,111,1111
-Challenge 15 (String Length)        PASS    9 codes + 0 -> 9
-Challenge 16 (Repeat Phrase)        PASS    echo "3"    -> HELLO x3
-Challenge 17 (Palindrome)           PASS    echo "1221" -> YES
-Challenge 18 (Collatz Steps)        PASS    echo "6"    -> 8
-Challenge 19 (Run-Length Decode)    PASS    3,65,2,66.. -> decoded
-Challenge 20 (Mini Gradebook)       PASS    12,8,15,10,14 -> 8,15,11
-Challenge 21 (Recursive Fibonacci)  PASS    echo "7"    -> 13
-Challenge 22 (Tiny VM)              PASS    PUSH 5,PRINT-> 5
-Challenge 23 (Text Histogram)       PASS    2,4,1,3,5,2 -> labeled bars
-Challenge 24 (Digital Clock Tick)   PASS    23:59:59    -> 0:0:0
-Challenge 25 (Caesar Cipher)        PASS    shift 3,CODE-> 70,82,71,72
-```
-
-**25/25 PASS**
-
-## Capstone: Brainfuck Interpreter in ArnoldC
-
-The ultimate challenge: [`brainfuck.arnoldc`](brainfuck.arnoldc) is an ArnoldC program that **interprets and executes Brainfuck programs**. It simulates an entire programming language inside an esoteric language that has no arrays, no strings, and only `println` for output.
-
-### Architecture
-
-The interpreter faces a fundamental problem: ArnoldC has no arrays. The solution uses **individual variables as simulated arrays** with method-based dispatch:
-
-| Component | Implementation |
-|-----------|---------------|
-| Memory tape | Individual cell variables (`c0`-`cN`), accessed via `tapeRead`/`tapeWrite` methods |
-| BF program | **Hardcoded constants** in the `fetch` method body (avoids ArnoldC's 100-local-variable limit) |
-| Data pointer | Single variable `dp` |
-| Instruction pointer | Single variable `ip` |
-| Bracket matching | Runtime depth-counting scan using the `fetch` method |
-
-The three methods simulate array access:
-- `fetch(idx)` — returns the instruction at position `idx` (instructions hardcoded as constants in the if/else chain)
-- `tapeRead(idx, c0, c1, ..., cN)` — returns the cell value at position `idx` via parameter passing
-- `tapeWrite(targetIdx, cellIdx, oldVal, newVal)` — returns `newVal` if indices match, `oldVal` otherwise
-
-### BF Instruction Encoding
-
-| BF | Code | BF | Code |
-|----|------|----|------|
-| `>` | 1 | `.` | 5 |
-| `<` | 2 | `,` | 6 |
-| `+` | 3 | `[` | 7 |
-| `-` | 4 | `]` | 8 |
-| (end) | 0 | | |
-
-### Execution Model
-
-- **Tape:** Auto-sized per program, unbounded integers, initialized to 0
-- **Program size:** Unlimited (instructions are hardcoded constants, not variables)
-- **Output:** Numeric (prints cell value as integer)
-- **Brackets:** Matched at runtime via forward/backward scanning with nesting depth tracking
-- **Input (`,`):** Not supported in current version
-- **Post-execution:** Dumps full tape state and data pointer for verification
-
-### How to Use
-
-```bash
-# Use the generator (auto-sizes tape and program):
-python3 -c "
-from generate_bf_interpreter import generate
-generate('+++++.', output_path='my_program.arnoldc')
-"
-java -jar ArnoldC.jar my_program.arnoldc
-java my_program
-
-# Or for Hello World:
-python3 -c "
-from generate_bf_interpreter import generate
-hw = '++++++++++[>+++++++>++++++++++>+++>+<<<<-]>++.>+.+++++++..+++.>++.<<+++++++++++++++.>.+++.------.--------.>+.>.'
-generate(hw, output_path='hello.arnoldc')
-"
-java -jar ArnoldC.jar hello.arnoldc && java hello
-# Output: 72 101 108 108 111 32 87 111 114 108 100 33 10  (= "Hello World!\n")
-```
-
-### Test Suite
-
-The interpreter is verified against the reference `brainfuck` interpreter (v2.7.3) using an automated test harness:
-
-```bash
-python3 test_bf.py       # run all 38 tests
-python3 test_bf.py -v    # verbose output
-python3 test_bf.py -k hello  # filter tests by name
-```
-
-**38 tests across 8 categories**, all comparing ArnoldC output against the reference interpreter:
-
-| Category | Tests | Examples |
-|----------|-------|---------|
-| Trivial | 5 | empty, `.`, `+.`, `+++++.`, `+++--.` |
-| Pointer movement | 4 | `+>++>.`, `+>++<.`, zigzag prints |
-| Simple loops | 6 | multiply, add, clear, skip, countdown |
-| Nested loops | 4 | 2x2x2=8, 3x3x3=27, 4x7=28, 5x2=10 |
-| ASCII output | 3 | print 'A' (65), '0' (48), newline (10) |
-| Edge cases | 4 | only moves, loop-at-start, nested skip, back-to-back loops |
-| Real-world | 7 | **Hello World**, ABCDEFG, "567", powers of 2, squares, cell copy |
-| Tape verification | 4 | cell setup, post-loop state, swap, double |
-
-**Output comparison method:** The reference BF interpreter outputs raw bytes; the ArnoldC interpreter outputs integers. The test harness converts reference output to byte values (`ord()`), parses ArnoldC output lines, and applies `% 256` normalization for comparison.
-
-### Why This Is Hard
-
-This program doesn't just solve a computation — it **simulates another programming language**. In a language with no arrays, no strings, no random access, and no `print` without newline, it:
-
-- Manually represents and updates a memory tape via individual variables
-- Hardcodes BF instructions as constants in a method's if/else chain
-- Dispatches 7 instruction types via sequential equality checks
-- Implements nested bracket matching with depth-counting forward/backward scans
-- Uses a 4-parameter `tapeWrite` method called N times per write to conditionally update exactly one cell
-
-The result: **a working, tested interpreter for a Turing-complete language, written entirely in Arnold Schwarzenegger quotes.**
+1. **25 challenges:** Five parallel AI agents each tackled a batch of 5 challenges, writing `.arnoldc` source, compiling with the real compiler, and verifying outputs
+2. **Brainfuck interpreter:** Designed an architecture to simulate arrays via method parameter passing, wrote a Python generator for the repetitive ArnoldC code, and iterated through compilation errors
+3. **100-local-variable discovery:** Empirical testing revealed ArnoldC's bytecode generator fails above 100 locals per method. Redesigned the interpreter to hardcode program data as constants rather than variables.
+4. **Test suite:** Built an automated harness comparing ArnoldC BF output against the reference `brainfuck` interpreter across 38 test cases covering 8 categories, from trivial programs to Hello World (111 instructions)
 
 ## License
 
