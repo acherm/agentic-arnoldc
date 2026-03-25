@@ -1,6 +1,6 @@
 # Agentic ArnoldC
 
-25 programming challenges, a Brainfuck interpreter, and an automated test suite -- all in **[ArnoldC](https://github.com/lhartikk/ArnoldC)**, the esoteric programming language where every keyword is an Arnold Schwarzenegger movie quote.
+25 programming challenges, a Brainfuck interpreter, an MnM Lang interpreter, and automated test suites -- all in **[ArnoldC](https://github.com/lhartikk/ArnoldC)**, the esoteric programming language where every keyword is an Arnold Schwarzenegger movie quote.
 
 Everything was written, compiled, debugged, and verified by AI agents (Claude) in a single conversation.
 
@@ -44,7 +44,13 @@ ArnoldC is an imperative programming language that compiles to JVM bytecode. Its
 ├── challenge01.arnoldc .. challenge25.arnoldc   # 25 programming challenges
 ├── brainfuck.arnoldc                            # BF interpreter (generated)
 ├── generate_bf_interpreter.py                   # Python generator for BF interpreter
-├── test_bf.py                                   # Automated test suite (38 tests)
+├── test_bf.py                                   # Automated test suite (38 BF tests)
+├── generate_mnm_interpreter.py                  # Python generator for MnM Lang interpreter
+├── test_mnm.py                                  # Automated test suite (35 MnM tests)
+├── mnm_examples/                                # MnM Lang example programs
+│   ├── hello_world.mnm / .mnm.json
+│   ├── factorial.mnm / .mnm.json
+│   └── fizzbuzz.mnm / .mnm.json
 └── README.md
 ```
 
@@ -165,7 +171,127 @@ This program doesn't just solve a computation -- it **simulates another programm
 
 The result: **a working, tested interpreter for a Turing-complete language, written entirely in Arnold Schwarzenegger quotes.**
 
-## Test Suite
+## MnM Lang Interpreter in ArnoldC
+
+[MnM Lang](https://github.com/mufeedvh/mnmlang) is an esoteric programming language where source code is a grid of colored M&M candies. It's a stack-based VM with 37 opcodes across 6 color families. Programs come with a `.mnm.json` sidecar file containing strings, variables, and input queues.
+
+The MnM interpreter follows the same architecture as the Brainfuck interpreter: a Python generator ([`generate_mnm_interpreter.py`](generate_mnm_interpreter.py)) takes a `.mnm` program + sidecar and produces a tailored ArnoldC file that executes it.
+
+### Why a Generator, Not a Single Generic Interpreter?
+
+A natural question: why generate a *specific* ArnoldC program per MnM input, rather than writing one *generic* ArnoldC interpreter that reads any MnM program?
+
+The answer is **ArnoldC has no arrays**. This forces three things to be known at generation time:
+
+1. **The program itself** — MnM instructions are stored via `fetchOpcode(idx)` / `fetchOperand(idx)` methods that are giant if/else chains matching each index to a hardcoded constant. There's no way to store a list of instructions and index into it at runtime.
+
+2. **Stack and variable sizes** — `stackRead(idx, s0, s1, ..., sN)` passes every cell as a parameter and uses if/else to select the right one. The number of parameters must be fixed at compile time.
+
+3. **String literals** — `printStr(idx)` has each string baked into a `TALK TO THE HAND "..."` inside an if/else chain. ArnoldC has no string variables.
+
+A "more generic" approach would mean pre-allocating huge fixed-size arrays (200 instruction slots, 50 stack cells, etc.) and reading the program from stdin. But this would produce enormous if/else chains (~3000+ lines just for fetch methods), stdin input would require reading hundreds of integers one at a time, and strings would remain impossible to pass dynamically. It would still not be truly generic — just a bigger fixed-size interpreter.
+
+The generator approach is the pragmatic sweet spot: it produces a **compact, tailored interpreter** for each MnM program, with exactly the resources needed.
+
+### Architecture
+
+| Component | Implementation |
+|-----------|---------------|
+| Value stack | Individual variables (`s0`–`sN`), accessed via `stackRead` / `condWrite` |
+| MnM variables | Individual variables (`v0`–`vK`), initialized from sidecar, accessed via `varRead` / `condWrite` |
+| Call stack | Individual variables (`cs0`–`csM`) for CALL/RET subroutines |
+| MnM program | Hardcoded constants in `fetchOpcode` / `fetchOperand` methods |
+| Input queues | Pre-loaded from sidecar JSON, accessed via `readIntVal` method |
+| Strings | Hardcoded `TALK TO THE HAND "..."` in `printStr` method |
+
+### Supported Opcodes (30 of 37)
+
+| Category | Opcodes |
+|----------|---------|
+| Stack/Variables | PUSH, LOAD, STORE, DUP, POP, INC, DEC |
+| Arithmetic | ADD, SUB, MUL, DIV, MOD |
+| Comparison | EQ, LT, GT |
+| Logic | AND, OR, NOT |
+| Stack shuffling | SWAP, ROT |
+| Control flow | JMP, JZ, JNZ, CALL, RET, HALT, LABEL |
+| I/O | PRINT, PRINT\_STR, READ\_INT, EMIT\_CHAR, NEWLINE |
+
+Not yet implemented: PUSH\_STR, READ\_STR, CONCAT, LEN, TO\_INT, TO\_STR (string manipulation operations that have no natural equivalent in ArnoldC's integer-only type system).
+
+### How to Use
+
+```bash
+# Generate an ArnoldC interpreter for a MnM program:
+python3 generate_mnm_interpreter.py mnm_examples/factorial.mnm mnm_examples/factorial.mnm.json mnm_factorial.arnoldc
+
+# Compile and run:
+java -jar ArnoldC.jar mnm_factorial.arnoldc
+java mnm_factorial
+# Output: 120
+
+# Or from Python:
+python3 -c "
+from generate_mnm_interpreter import generate
+import json
+with open('mnm_examples/fizzbuzz.mnm') as f: src = f.read()
+with open('mnm_examples/fizzbuzz.mnm.json') as f: sc = json.load(f)
+generate(src, sc, output_path='mnm_fizzbuzz.arnoldc')
+"
+java -jar ArnoldC.jar mnm_fizzbuzz.arnoldc && java mnm_fizzbuzz
+# Output: 1 2 Fizz 4 Buzz Fizz 7 8 Fizz Buzz 11 Fizz 13 14 FizzBuzz
+```
+
+### MnM Opcode Dispatch (How It Works)
+
+Each iteration of the main loop:
+1. Fetches the opcode and operand at the current instruction pointer
+2. Checks each opcode via sequential equality tests (`YOU ARE NOT YOU YOU ARE ME`)
+3. The matching handler manipulates the stack, variables, and/or control flow
+4. If no jump was taken, advances the instruction pointer by 1
+
+For example, MnM's `ADD` (pop two values, push their sum) compiles to ArnoldC that:
+- Decrements `sp`, calls `stackRead` to get the top value
+- Decrements `sp` again, calls `stackRead` to get the second value
+- Computes the sum with `GET UP`
+- Calls `condWrite` for each stack cell to write the result at `stack[sp]`
+- Increments `sp`
+
+### Known Limitations
+
+- **No same-line output:** `TALK TO THE HAND` always appends a newline. MnM's PRINT and PRINT\_STR each produce a line. NEWLINE is a no-op (since the preceding print already added one).
+- **EMIT\_CHAR prints integers:** ArnoldC cannot print characters, so EMIT\_CHAR outputs the numeric value.
+- **Generated code size:** ~1400–2100 lines of ArnoldC depending on program complexity.
+
+### Test Results: 35/35 PASS
+
+```bash
+python3 test_mnm.py
+```
+
+```
+  PASS  hello_world          PASS  jz_taken
+  PASS  factorial_5          PASS  jz_not_taken
+  PASS  fizzbuzz             PASS  jnz_taken
+  PASS  halt_only            PASS  jnz_not_taken
+  PASS  push_print           PASS  and_true
+  PASS  add                  PASS  and_false
+  PASS  sub                  PASS  or_true
+  PASS  mul                  PASS  countdown
+  PASS  div                  PASS  factorial_6
+  PASS  mod                  PASS  pop
+  PASS  eq_true              PASS  multi_print_str
+  PASS  eq_false             PASS  rot
+  PASS  gt_true              PASS  swap
+  PASS  gt_false             PASS  var_load_store
+  PASS  lt_true              PASS  inc_dec
+  PASS  lt_false             PASS  jmp
+  PASS  not_zero             PASS  dup
+  PASS  not_nonzero
+
+35/35 passed
+```
+
+## BF Test Suite
 
 The BF interpreter is verified against the reference [`brainfuck`](https://github.com/fabianishere/brainfuck) interpreter (v2.7.3) using [`test_bf.py`](test_bf.py), an automated test harness.
 
@@ -328,12 +454,13 @@ Challenge 22 implements a virtual machine *inside* an esoteric language. The VM 
 
 ## How This Was Made
 
-All programs were generated by **Claude (Anthropic)** in a single conversation:
+All programs were generated by **Claude (Anthropic)**:
 
 1. **25 challenges:** Five parallel AI agents each tackled a batch of 5 challenges, writing `.arnoldc` source, compiling with the real compiler, and verifying outputs
 2. **Brainfuck interpreter:** Designed an architecture to simulate arrays via method parameter passing, wrote a Python generator for the repetitive ArnoldC code, and iterated through compilation errors
-3. **100-local-variable discovery:** Empirical testing revealed ArnoldC's bytecode generator fails above 100 locals per method. Redesigned the interpreter to hardcode program data as constants rather than variables.
-4. **Test suite:** Built an automated harness comparing ArnoldC BF output against the reference `brainfuck` interpreter across 38 test cases covering 8 categories, from trivial programs to Hello World (111 instructions)
+3. **100-local-variable discovery:** Empirical testing revealed ArnoldC's bytecode generator fails above 100 locals per method. Redesigned the interpreter to hardcode program data as constants rather than variables
+4. **BF test suite:** Built an automated harness comparing ArnoldC BF output against the reference `brainfuck` interpreter across 38 test cases covering 8 categories, from trivial programs to Hello World (111 instructions)
+5. **MnM Lang interpreter:** Extended the generator architecture to handle MnM Lang's 30-opcode stack machine — stack, variables, call stack, input queues, and string output — all simulated in ArnoldC's integer-only type system. Verified with 35 automated tests
 
 ## License
 
