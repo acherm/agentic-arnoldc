@@ -193,7 +193,7 @@ Challenge 25 (Caesar Cipher)        PASS    shift 3,CODE-> 70,82,71,72
 
 ## Capstone: Brainfuck Interpreter in ArnoldC
 
-The ultimate challenge: [`brainfuck.arnoldc`](brainfuck.arnoldc) is a **702-line ArnoldC program that interprets and executes Brainfuck programs**. It simulates an entire programming language inside an esoteric language that has no arrays, no strings, and only `println` for output.
+The ultimate challenge: [`brainfuck.arnoldc`](brainfuck.arnoldc) is an ArnoldC program that **interprets and executes Brainfuck programs**. It simulates an entire programming language inside an esoteric language that has no arrays, no strings, and only `println` for output.
 
 ### Architecture
 
@@ -201,15 +201,15 @@ The interpreter faces a fundamental problem: ArnoldC has no arrays. The solution
 
 | Component | Implementation |
 |-----------|---------------|
-| Memory tape | 10 variables (`c0`-`c9`), accessed via `tapeRead`/`tapeWrite` methods with 10-way if/else chains |
-| BF program | 20 variables (`p0`-`p19`), accessed via `fetch` method with 20-way if/else chain |
+| Memory tape | Individual cell variables (`c0`-`cN`), accessed via `tapeRead`/`tapeWrite` methods |
+| BF program | **Hardcoded constants** in the `fetch` method body (avoids ArnoldC's 100-local-variable limit) |
 | Data pointer | Single variable `dp` |
 | Instruction pointer | Single variable `ip` |
 | Bracket matching | Runtime depth-counting scan using the `fetch` method |
 
-The three methods use **parameter passing** to simulate array access:
-- `fetch(idx, p0, p1, ..., p19)` — returns the instruction at position `idx`
-- `tapeRead(idx, c0, c1, ..., c9)` — returns the cell value at position `idx`
+The three methods simulate array access:
+- `fetch(idx)` — returns the instruction at position `idx` (instructions hardcoded as constants in the if/else chain)
+- `tapeRead(idx, c0, c1, ..., cN)` — returns the cell value at position `idx` via parameter passing
 - `tapeWrite(targetIdx, cellIdx, oldVal, newVal)` — returns `newVal` if indices match, `oldVal` otherwise
 
 ### BF Instruction Encoding
@@ -224,50 +224,70 @@ The three methods use **parameter passing** to simulate array access:
 
 ### Execution Model
 
-- **Tape:** 10 cells, unbounded integers, initialized to 0
+- **Tape:** Auto-sized per program, unbounded integers, initialized to 0
+- **Program size:** Unlimited (instructions are hardcoded constants, not variables)
 - **Output:** Numeric (prints cell value as integer)
 - **Brackets:** Matched at runtime via forward/backward scanning with nesting depth tracking
 - **Input (`,`):** Not supported in current version
 - **Post-execution:** Dumps full tape state and data pointer for verification
 
-### How to Change the Embedded BF Program
-
-Edit the `BF_SOURCE` line in `generate_bf_interpreter.py` and regenerate:
+### How to Use
 
 ```bash
-# Edit the source
-sed -i '' 's/BF_SOURCE = .*/BF_SOURCE = "+++++."/' generate_bf_interpreter.py
+# Use the generator (auto-sizes tape and program):
+python3 -c "
+from generate_bf_interpreter import generate
+generate('+++++.', output_path='my_program.arnoldc')
+"
+java -jar ArnoldC.jar my_program.arnoldc
+java my_program
 
-# Regenerate, compile, and run
-python3 generate_bf_interpreter.py
-java -jar ArnoldC.jar brainfuck.arnoldc
-java brainfuck
+# Or for Hello World:
+python3 -c "
+from generate_bf_interpreter import generate
+hw = '++++++++++[>+++++++>++++++++++>+++>+<<<<-]>++.>+.+++++++..+++.>++.<<+++++++++++++++.>.+++.------.--------.>+.>.'
+generate(hw, output_path='hello.arnoldc')
+"
+java -jar ArnoldC.jar hello.arnoldc && java hello
+# Output: 72 101 108 108 111 32 87 111 114 108 100 33 10  (= "Hello World!\n")
 ```
 
-Or manually edit the `p0`-`p19` values in `brainfuck.arnoldc` directly using the encoding table above.
+### Test Suite
 
-### Verified Test Results
+The interpreter is verified against the reference `brainfuck` interpreter (v2.7.3) using an automated test harness:
 
-| BF Program | Description | Output | Tape State |
-|-----------|-------------|--------|------------|
-| `+++++.` | Increment 5x, print | `5` | [5,0,0,...] |
-| `++>+++.<.` | Move and print | `3`, `2` | [2,3,0,...] |
-| `+++[>++<-]>.` | Multiply 3x2 | `6` | [0,6,0,...] |
-| `+++[>++<-]` | Loop only (no print) | (none) | [0,6,0,...] |
-| `+++.>[+++].` | Skip `[` when cell=0 | `3`, `0` | [3,0,0,...] |
-| `++[>+++[>++<-]<-]>>.` | Nested loops: 2x3x2 | `12` | [0,0,12,...] |
+```bash
+python3 test_bf.py       # run all 38 tests
+python3 test_bf.py -v    # verbose output
+python3 test_bf.py -k hello  # filter tests by name
+```
+
+**38 tests across 8 categories**, all comparing ArnoldC output against the reference interpreter:
+
+| Category | Tests | Examples |
+|----------|-------|---------|
+| Trivial | 5 | empty, `.`, `+.`, `+++++.`, `+++--.` |
+| Pointer movement | 4 | `+>++>.`, `+>++<.`, zigzag prints |
+| Simple loops | 6 | multiply, add, clear, skip, countdown |
+| Nested loops | 4 | 2x2x2=8, 3x3x3=27, 4x7=28, 5x2=10 |
+| ASCII output | 3 | print 'A' (65), '0' (48), newline (10) |
+| Edge cases | 4 | only moves, loop-at-start, nested skip, back-to-back loops |
+| Real-world | 7 | **Hello World**, ABCDEFG, "567", powers of 2, squares, cell copy |
+| Tape verification | 4 | cell setup, post-loop state, swap, double |
+
+**Output comparison method:** The reference BF interpreter outputs raw bytes; the ArnoldC interpreter outputs integers. The test harness converts reference output to byte values (`ord()`), parses ArnoldC output lines, and applies `% 256` normalization for comparison.
 
 ### Why This Is Hard
 
 This program doesn't just solve a computation — it **simulates another programming language**. In a language with no arrays, no strings, no random access, and no `print` without newline, it:
 
-- Manually represents and updates a memory tape via 10 individual variables
-- Encodes a BF program as 20 integer constants with a 21-parameter lookup method
+- Manually represents and updates a memory tape via individual variables
+- Hardcodes BF instructions as constants in a method's if/else chain
 - Dispatches 7 instruction types via sequential equality checks
 - Implements nested bracket matching with depth-counting forward/backward scans
-- Uses a 4-parameter `tapeWrite` method called 10 times per write to conditionally update exactly one cell
+- Uses a 4-parameter `tapeWrite` method called N times per write to conditionally update exactly one cell
 
-The result: **a working interpreter for a Turing-complete language, written entirely in Arnold Schwarzenegger quotes.**
+The result: **a working, tested interpreter for a Turing-complete language, written entirely in Arnold Schwarzenegger quotes.**
 
 ## License
 
