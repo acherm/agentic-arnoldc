@@ -1,0 +1,18 @@
+{
+  "strings": [
+    "FizzBuzz",
+    "Fizz",
+    "Buzz"
+  ],
+  "variables": [
+    1,
+    15,
+    15,
+    3,
+    5
+  ],
+  "inputs": {
+    "int": [],
+    "str": []
+  }
+}
