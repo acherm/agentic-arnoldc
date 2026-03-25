@@ -41,13 +41,14 @@ ArnoldC is an imperative programming language that compiles to JVM bytecode. Its
 
 ```
 .
-├── challenge01.arnoldc .. challenge25.arnoldc   # 25 programming challenges
-├── brainfuck.arnoldc                            # BF interpreter (generated)
-├── generate_bf_interpreter.py                   # Python generator for BF interpreter
-├── test_bf.py                                   # Automated test suite (38 BF tests)
-├── generate_mnm_interpreter.py                  # Python generator for MnM Lang interpreter
-├── test_mnm.py                                  # Automated test suite (35 MnM tests)
-├── mnm_examples/                                # MnM Lang example programs
+├── challenges/
+│   └── challenge01.arnoldc .. challenge25.arnoldc   # 25 programming challenges
+├── brainfuck.arnoldc                                # BF interpreter (generated)
+├── generate_bf_interpreter.py                       # Python generator for BF interpreter
+├── test_bf.py                                       # Automated test suite (38 BF tests)
+├── generate_mnm_interpreter.py                      # Python generator for MnM Lang interpreter
+├── test_mnm.py                                      # Automated test suite (35 MnM tests)
+├── mnm_examples/                                    # MnM Lang example programs
 │   ├── hello_world.mnm / .mnm.json
 │   ├── factorial.mnm / .mnm.json
 │   └── fizzbuzz.mnm / .mnm.json
@@ -60,41 +61,41 @@ ArnoldC is an imperative programming language that compiles to JVM bytecode. Its
 
 | # | Challenge | File | Description | Example |
 |---|-----------|------|-------------|---------|
-| 1 | Sum 1 to N | [`challenge01.arnoldc`](challenge01.arnoldc) | Read n, print 1+2+...+n | 5 &rarr; 15 |
-| 2 | Countdown | [`challenge02.arnoldc`](challenge02.arnoldc) | Print n down to 0 | 4 &rarr; 4,3,2,1,0 |
-| 3 | Even or Odd | [`challenge03.arnoldc`](challenge03.arnoldc) | Print EVEN or ODD | 7 &rarr; ODD |
-| 4 | Max of Two | [`challenge04.arnoldc`](challenge04.arnoldc) | Print the larger of two integers | 12,9 &rarr; 12 |
-| 5 | Absolute Value | [`challenge05.arnoldc`](challenge05.arnoldc) | Print \|n\| | -8 &rarr; 8 |
-| 6 | Multiplication Table | [`challenge06.arnoldc`](challenge06.arnoldc) | Print n*1 through n*10 | 3 &rarr; 3,6,...,30 |
-| 7 | Power of Two | [`challenge07.arnoldc`](challenge07.arnoldc) | Print 2^0 through 2^n | 4 &rarr; 1,2,4,8,16 |
-| 8 | Multiply w/o `*` | [`challenge08.arnoldc`](challenge08.arnoldc) | Repeated addition only | 4,3 &rarr; 12 |
-| 9 | Integer Average | [`challenge09.arnoldc`](challenge09.arnoldc) | Print (a+b)/2 | 7,10 &rarr; 8 |
-| 10 | Sum of Digits | [`challenge10.arnoldc`](challenge10.arnoldc) | Sum decimal digits | 527 &rarr; 14 |
+| 1 | Sum 1 to N | [`challenge01.arnoldc`](challenges/challenge01.arnoldc) | Read n, print 1+2+...+n | 5 &rarr; 15 |
+| 2 | Countdown | [`challenge02.arnoldc`](challenges/challenge02.arnoldc) | Print n down to 0 | 4 &rarr; 4,3,2,1,0 |
+| 3 | Even or Odd | [`challenge03.arnoldc`](challenges/challenge03.arnoldc) | Print EVEN or ODD | 7 &rarr; ODD |
+| 4 | Max of Two | [`challenge04.arnoldc`](challenges/challenge04.arnoldc) | Print the larger of two integers | 12,9 &rarr; 12 |
+| 5 | Absolute Value | [`challenge05.arnoldc`](challenges/challenge05.arnoldc) | Print \|n\| | -8 &rarr; 8 |
+| 6 | Multiplication Table | [`challenge06.arnoldc`](challenges/challenge06.arnoldc) | Print n*1 through n*10 | 3 &rarr; 3,6,...,30 |
+| 7 | Power of Two | [`challenge07.arnoldc`](challenges/challenge07.arnoldc) | Print 2^0 through 2^n | 4 &rarr; 1,2,4,8,16 |
+| 8 | Multiply w/o `*` | [`challenge08.arnoldc`](challenges/challenge08.arnoldc) | Repeated addition only | 4,3 &rarr; 12 |
+| 9 | Integer Average | [`challenge09.arnoldc`](challenges/challenge09.arnoldc) | Print (a+b)/2 | 7,10 &rarr; 8 |
+| 10 | Sum of Digits | [`challenge10.arnoldc`](challenges/challenge10.arnoldc) | Sum decimal digits | 527 &rarr; 14 |
 
 ### Easy/Medium -- Original (11-20)
 
 | # | Challenge | File | Description | Example |
 |---|-----------|------|-------------|---------|
-| 11 | Total Counter | [`challenge11.arnoldc`](challenge11.arnoldc) | Sum of 6 integers | 3,4,2,5,1,6 &rarr; 21 |
-| 12 | Largest Category | [`challenge12.arnoldc`](challenge12.arnoldc) | Find label (A-F) with highest count | 3,9,2,5,1,6 &rarr; B |
-| 13 | Vending Machine | [`challenge13.arnoldc`](challenge13.arnoldc) | Greedy coin change | 68 &rarr; 2Q,1D,1N,3P |
-| 14 | Staircase | [`challenge14.arnoldc`](challenge14.arnoldc) | Print staircase pattern | 4 &rarr; 1,11,111,1111 |
-| 15 | String Length | [`challenge15.arnoldc`](challenge15.arnoldc) | Count integers until sentinel 0 | 9 codes + 0 &rarr; 9 |
-| 16 | Repeat Phrase | [`challenge16.arnoldc`](challenge16.arnoldc) | Print HELLO k times | 3 &rarr; HELLO x3 |
-| 17 | Palindrome | [`challenge17.arnoldc`](challenge17.arnoldc) | Check if number is palindrome | 1221 &rarr; YES |
-| 18 | Collatz Steps | [`challenge18.arnoldc`](challenge18.arnoldc) | Count Collatz steps to 1 | 6 &rarr; 8 |
-| 19 | Run-Length Decode | [`challenge19.arnoldc`](challenge19.arnoldc) | Expand (count,value) pairs | 3,65,2,66 &rarr; 65x3,66x2 |
-| 20 | Mini Gradebook | [`challenge20.arnoldc`](challenge20.arnoldc) | Min, max, average of 5 grades | 12,8,15,10,14 &rarr; 8,15,11 |
+| 11 | Total Counter | [`challenge11.arnoldc`](challenges/challenge11.arnoldc) | Sum of 6 integers | 3,4,2,5,1,6 &rarr; 21 |
+| 12 | Largest Category | [`challenge12.arnoldc`](challenges/challenge12.arnoldc) | Find label (A-F) with highest count | 3,9,2,5,1,6 &rarr; B |
+| 13 | Vending Machine | [`challenge13.arnoldc`](challenges/challenge13.arnoldc) | Greedy coin change | 68 &rarr; 2Q,1D,1N,3P |
+| 14 | Staircase | [`challenge14.arnoldc`](challenges/challenge14.arnoldc) | Print staircase pattern | 4 &rarr; 1,11,111,1111 |
+| 15 | String Length | [`challenge15.arnoldc`](challenges/challenge15.arnoldc) | Count integers until sentinel 0 | 9 codes + 0 &rarr; 9 |
+| 16 | Repeat Phrase | [`challenge16.arnoldc`](challenges/challenge16.arnoldc) | Print HELLO k times | 3 &rarr; HELLO x3 |
+| 17 | Palindrome | [`challenge17.arnoldc`](challenges/challenge17.arnoldc) | Check if number is palindrome | 1221 &rarr; YES |
+| 18 | Collatz Steps | [`challenge18.arnoldc`](challenges/challenge18.arnoldc) | Count Collatz steps to 1 | 6 &rarr; 8 |
+| 19 | Run-Length Decode | [`challenge19.arnoldc`](challenges/challenge19.arnoldc) | Expand (count,value) pairs | 3,65,2,66 &rarr; 65x3,66x2 |
+| 20 | Mini Gradebook | [`challenge20.arnoldc`](challenges/challenge20.arnoldc) | Min, max, average of 5 grades | 12,8,15,10,14 &rarr; 8,15,11 |
 
 ### Hard + Bonus (21-25)
 
 | # | Challenge | File | Description | Example |
 |---|-----------|------|-------------|---------|
-| 21 | Recursive Fibonacci | [`challenge21.arnoldc`](challenge21.arnoldc) | fib(n) via recursive method | 7 &rarr; 13 |
-| 22 | Tiny Virtual Machine | [`challenge22.arnoldc`](challenge22.arnoldc) | Interpreter for PUSH/ADD/SUB/MUL/PRINT/HALT | PUSH 5, PRINT &rarr; 5 |
-| 23 | Text Histogram | [`challenge23.arnoldc`](challenge23.arnoldc) | Bar chart for 6 labeled counts | 2,4,1,... &rarr; A:2, B:4,... |
-| 24 | Digital Clock Tick | [`challenge24.arnoldc`](challenge24.arnoldc) | Advance time by one second | 23:59:59 &rarr; 0:0:0 |
-| 25 | Caesar Cipher | [`challenge25.arnoldc`](challenge25.arnoldc) | Shift ASCII codes by k | shift 3, CODE &rarr; FRGH |
+| 21 | Recursive Fibonacci | [`challenge21.arnoldc`](challenges/challenge21.arnoldc) | fib(n) via recursive method | 7 &rarr; 13 |
+| 22 | Tiny Virtual Machine | [`challenge22.arnoldc`](challenges/challenge22.arnoldc) | Interpreter for PUSH/ADD/SUB/MUL/PRINT/HALT | PUSH 5, PRINT &rarr; 5 |
+| 23 | Text Histogram | [`challenge23.arnoldc`](challenges/challenge23.arnoldc) | Bar chart for 6 labeled counts | 2,4,1,... &rarr; A:2, B:4,... |
+| 24 | Digital Clock Tick | [`challenge24.arnoldc`](challenges/challenge24.arnoldc) | Advance time by one second | 23:59:59 &rarr; 0:0:0 |
+| 25 | Caesar Cipher | [`challenge25.arnoldc`](challenges/challenge25.arnoldc) | Shift ASCII codes by k | shift 3, CODE &rarr; FRGH |
 
 **25/25 PASS** -- all compiled and verified with the actual ArnoldC compiler.
 
@@ -390,7 +391,7 @@ wget http://lhartikk.github.io/ArnoldC.jar
 
 ```bash
 # Compile
-java -jar ArnoldC.jar challenge01.arnoldc
+java -jar ArnoldC.jar challenges/challenge01.arnoldc
 
 # Run (single input)
 echo "5" | java challenge01
@@ -405,7 +406,7 @@ echo "5" | java challenge01
 
 ```bash
 # Compile everything
-for f in challenge*.arnoldc; do java -jar ArnoldC.jar "$f"; done
+for f in challenges/challenge*.arnoldc; do java -jar ArnoldC.jar "$f"; done
 
 # Run selected tests
 echo "5"    | java challenge01   # expect: 15
