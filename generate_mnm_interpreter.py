@@ -131,7 +131,7 @@ def estimate_stack_size(instructions):
 # ── Code generation ──────────────────────────────────────────────────────────
 
 def generate(mnm_source, sidecar_data, output_path=None,
-             stack_size=None, call_stack_size=None):
+             stack_size=None, call_stack_size=None, static_fields=False):
     """Generate ArnoldC source that interprets the given MnM program.
 
     Args:
@@ -140,6 +140,9 @@ def generate(mnm_source, sidecar_data, output_path=None,
         output_path:    Where to write the .arnoldc file (optional).
         stack_size:     Max stack depth (auto-estimated if None).
         call_stack_size: Max call nesting (default 5).
+        static_fields:  If True, split opcode handlers into separate methods.
+                        Requires the patched ArnoldC compiler (static field support).
+                        Eliminates the JVM 64KB method body limit.
 
     Returns:
         Generated ArnoldC source as a string.
@@ -167,8 +170,12 @@ def generate(mnm_source, sidecar_data, output_path=None,
     prog_size = len(enc_op)
 
     lines = []
+    # Redirectable emit: handler code goes to _target[0]
+    _target = [lines]
+    handler_methods = []  # [(name, [lines])]
+
     def emit(s=""):
-        lines.append(s)
+        _target[0].append(s)
 
     # Helper strings for method calls
     s_args = " ".join(f"s{i}" for i in range(stack_size))
@@ -251,6 +258,43 @@ def generate(mnm_source, sidecar_data, output_path=None,
     def emit_end_if():
         emit("YOU HAVE NO RESPECT FOR LOGIC")
 
+    # ── static_fields: handler method splitting ──────────────────────
+    _handler_counter = [0]
+
+    def begin_handler(opcode_name):
+        """Start an opcode handler. In static_fields mode, redirects emit
+        to a method buffer and emits a call in main."""
+        if not static_fields:
+            emit_check_opcode(opcode_name)
+            return
+        # In main: check opcode and call handler method
+        method_name = f"handle{_handler_counter[0]}"
+        _handler_counter[0] += 1
+        emit_check_opcode(opcode_name)
+        emit("GET YOUR ASS TO MARS dummy")
+        emit(f"DO IT NOW {method_name}")
+        emit_end_if()
+        emit()
+        # Redirect emit to handler method buffer
+        buf = []
+        handler_methods.append((method_name, buf))
+        _target[0] = buf
+        # Emit method header
+        emit(f"LISTEN TO ME VERY CAREFULLY {method_name}")
+        emit("GIVE THESE PEOPLE AIR")
+
+    def end_handler():
+        """End an opcode handler."""
+        if not static_fields:
+            emit_end_if()
+            emit()
+            return
+        # Emit method footer and restore emit target to main
+        emit("I'LL BE BACK 0")
+        emit("HASTA LA VISTA, BABY")
+        emit()
+        _target[0] = lines
+
     def emit_stack_push_a():
         """Write variable 'a' to stack[sp], then sp++."""
         for i in range(stack_size):
@@ -304,8 +348,7 @@ def generate(mnm_source, sidecar_data, output_path=None,
     # ── NOP (LABEL at runtime) — nothing to do ──────────────────────────
 
     # ── PUSH ─────────────────────────────────────────────────────────────
-    emit_check_opcode('PUSH')
-    # Write operand to stack[sp] then sp++
+    begin_handler('PUSH')
     for i in range(stack_size):
         emit(f"GET YOUR ASS TO MARS s{i}")
         emit(f"DO IT NOW condWrite sp {i} s{i} operand")
@@ -313,11 +356,10 @@ def generate(mnm_source, sidecar_data, output_path=None,
     emit("HERE IS MY INVITATION sp")
     emit("GET UP 1")
     emit("ENOUGH TALK")
-    emit_end_if()
-    emit()
+    end_handler()
 
     # ── LOAD ─────────────────────────────────────────────────────────────
-    emit_check_opcode('LOAD')
+    begin_handler('LOAD')
     if num_vars > 0:
         emit("GET YOUR ASS TO MARS a")
         emit(f"DO IT NOW varRead operand {v_args}")
@@ -326,18 +368,16 @@ def generate(mnm_source, sidecar_data, output_path=None,
         emit("HERE IS MY INVITATION 0")
         emit("ENOUGH TALK")
     emit_stack_push_a()
-    emit_end_if()
-    emit()
+    end_handler()
 
     # ── STORE ────────────────────────────────────────────────────────────
-    emit_check_opcode('STORE')
+    begin_handler('STORE')
     emit_stack_pop_into("a")
     emit_var_write_a()
-    emit_end_if()
-    emit()
+    end_handler()
 
     # ── DUP ──────────────────────────────────────────────────────────────
-    emit_check_opcode('DUP')
+    begin_handler('DUP')
     emit("GET TO THE CHOPPER spTmp")
     emit("HERE IS MY INVITATION sp")
     emit("GET DOWN 1")
@@ -345,20 +385,18 @@ def generate(mnm_source, sidecar_data, output_path=None,
     emit("GET YOUR ASS TO MARS a")
     emit(f"DO IT NOW stackRead spTmp {s_args}")
     emit_stack_push_a()
-    emit_end_if()
-    emit()
+    end_handler()
 
     # ── POP ──────────────────────────────────────────────────────────────
-    emit_check_opcode('POP')
+    begin_handler('POP')
     emit("GET TO THE CHOPPER sp")
     emit("HERE IS MY INVITATION sp")
     emit("GET DOWN 1")
     emit("ENOUGH TALK")
-    emit_end_if()
-    emit()
+    end_handler()
 
     # ── INC ──────────────────────────────────────────────────────────────
-    emit_check_opcode('INC')
+    begin_handler('INC')
     if num_vars > 0:
         emit("GET YOUR ASS TO MARS a")
         emit(f"DO IT NOW varRead operand {v_args}")
@@ -367,11 +405,10 @@ def generate(mnm_source, sidecar_data, output_path=None,
         emit("GET UP 1")
         emit("ENOUGH TALK")
         emit_var_write_a()
-    emit_end_if()
-    emit()
+    end_handler()
 
     # ── DEC ──────────────────────────────────────────────────────────────
-    emit_check_opcode('DEC')
+    begin_handler('DEC')
     if num_vars > 0:
         emit("GET YOUR ASS TO MARS a")
         emit(f"DO IT NOW varRead operand {v_args}")
@@ -380,8 +417,7 @@ def generate(mnm_source, sidecar_data, output_path=None,
         emit("GET DOWN 1")
         emit("ENOUGH TALK")
         emit_var_write_a()
-    emit_end_if()
-    emit()
+    end_handler()
 
     # ── Binary arithmetic: ADD SUB MUL DIV MOD ──────────────────────────
     binops = [
@@ -392,23 +428,21 @@ def generate(mnm_source, sidecar_data, output_path=None,
         ('MOD', 'I LET HIM GO'),
     ]
     for op_name, kw in binops:
-        emit_check_opcode(op_name)
+        begin_handler(op_name)
         emit_stack_pop_into("b")          # b = top
         emit_stack_pop_into("a")          # a = second
         emit("GET TO THE CHOPPER result")
         emit("HERE IS MY INVITATION a")
         emit(f"{kw} b")
         emit("ENOUGH TALK")
-        # Push result
         emit("GET TO THE CHOPPER a")
         emit("HERE IS MY INVITATION result")
         emit("ENOUGH TALK")
         emit_stack_push_a()
-        emit_end_if()
-        emit()
+        end_handler()
 
     # ── EQ ───────────────────────────────────────────────────────────────
-    emit_check_opcode('EQ')
+    begin_handler('EQ')
     emit_stack_pop_into("b")
     emit_stack_pop_into("a")
     emit("GET TO THE CHOPPER result")
@@ -419,11 +453,10 @@ def generate(mnm_source, sidecar_data, output_path=None,
     emit("HERE IS MY INVITATION result")
     emit("ENOUGH TALK")
     emit_stack_push_a()
-    emit_end_if()
-    emit()
+    end_handler()
 
     # ── LT  (second < first  ⇔  first > second  ⇔  b > a) ─────────────
-    emit_check_opcode('LT')
+    begin_handler('LT')
     emit_stack_pop_into("b")
     emit_stack_pop_into("a")
     emit("GET TO THE CHOPPER result")
@@ -434,11 +467,10 @@ def generate(mnm_source, sidecar_data, output_path=None,
     emit("HERE IS MY INVITATION result")
     emit("ENOUGH TALK")
     emit_stack_push_a()
-    emit_end_if()
-    emit()
+    end_handler()
 
     # ── GT  (second > first  ⇔  a > b) ─────────────────────────────────
-    emit_check_opcode('GT')
+    begin_handler('GT')
     emit_stack_pop_into("b")
     emit_stack_pop_into("a")
     emit("GET TO THE CHOPPER result")
@@ -449,11 +481,10 @@ def generate(mnm_source, sidecar_data, output_path=None,
     emit("HERE IS MY INVITATION result")
     emit("ENOUGH TALK")
     emit_stack_push_a()
-    emit_end_if()
-    emit()
+    end_handler()
 
     # ── AND ──────────────────────────────────────────────────────────────
-    emit_check_opcode('AND')
+    begin_handler('AND')
     emit_stack_pop_into("b")
     emit_stack_pop_into("a")
     emit("GET TO THE CHOPPER result")
@@ -464,11 +495,10 @@ def generate(mnm_source, sidecar_data, output_path=None,
     emit("HERE IS MY INVITATION result")
     emit("ENOUGH TALK")
     emit_stack_push_a()
-    emit_end_if()
-    emit()
+    end_handler()
 
     # ── OR ───────────────────────────────────────────────────────────────
-    emit_check_opcode('OR')
+    begin_handler('OR')
     emit_stack_pop_into("b")
     emit_stack_pop_into("a")
     emit("GET TO THE CHOPPER result")
@@ -479,12 +509,10 @@ def generate(mnm_source, sidecar_data, output_path=None,
     emit("HERE IS MY INVITATION result")
     emit("ENOUGH TALK")
     emit_stack_push_a()
-    emit_end_if()
-    emit()
+    end_handler()
 
     # ── NOT ──────────────────────────────────────────────────────────────
-    emit_check_opcode('NOT')
-    # Read top, compute NOT, write back in place
+    begin_handler('NOT')
     emit("GET TO THE CHOPPER spTmp")
     emit("HERE IS MY INVITATION sp")
     emit("GET DOWN 1")
@@ -496,12 +524,10 @@ def generate(mnm_source, sidecar_data, output_path=None,
     emit("YOU ARE NOT YOU YOU ARE ME 0")    # a = (a == 0)
     emit("ENOUGH TALK")
     emit_stack_write_at("spTmp", "a")
-    emit_end_if()
-    emit()
+    end_handler()
 
     # ── SWAP ─────────────────────────────────────────────────────────────
-    emit_check_opcode('SWAP')
-    # Read b = stack[sp-1] (top), a = stack[sp-2] (second)
+    begin_handler('SWAP')
     emit("GET TO THE CHOPPER spTmp")
     emit("HERE IS MY INVITATION sp")
     emit("GET DOWN 1")
@@ -514,23 +540,20 @@ def generate(mnm_source, sidecar_data, output_path=None,
     emit("ENOUGH TALK")
     emit("GET YOUR ASS TO MARS a")
     emit(f"DO IT NOW stackRead spTmp {s_args}")
-    # Write b to sp-2
     emit("GET TO THE CHOPPER spTmp")
     emit("HERE IS MY INVITATION sp")
     emit("GET DOWN 2")
     emit("ENOUGH TALK")
     emit_stack_write_at("spTmp", "b")
-    # Write a to sp-1
     emit("GET TO THE CHOPPER spTmp")
     emit("HERE IS MY INVITATION sp")
     emit("GET DOWN 1")
     emit("ENOUGH TALK")
     emit_stack_write_at("spTmp", "a")
-    emit_end_if()
-    emit()
+    end_handler()
 
     # ── ROT  [..., a, b, c] → [..., b, c, a] ────────────────────────────
-    emit_check_opcode('ROT')
+    begin_handler('ROT')
     emit("GET TO THE CHOPPER spTmp")
     emit("HERE IS MY INVITATION sp")
     emit("GET DOWN 1")
@@ -549,7 +572,6 @@ def generate(mnm_source, sidecar_data, output_path=None,
     emit("ENOUGH TALK")
     emit("GET YOUR ASS TO MARS a")
     emit(f"DO IT NOW stackRead spTmp {s_args}")
-    # Write b to sp-3, c to sp-2, a to sp-1
     emit("GET TO THE CHOPPER spTmp")
     emit("HERE IS MY INVITATION sp")
     emit("GET DOWN 3")
@@ -565,8 +587,7 @@ def generate(mnm_source, sidecar_data, output_path=None,
     emit("GET DOWN 1")
     emit("ENOUGH TALK")
     emit_stack_write_at("spTmp", "a")
-    emit_end_if()
-    emit()
+    end_handler()
 
     # ── JMP ──────────────────────────────────────────────────────────────
     emit_check_opcode('JMP')
@@ -575,7 +596,7 @@ def generate(mnm_source, sidecar_data, output_path=None,
     emit()
 
     # ── JZ  (pop; if zero → jump) — uses nested if ──────────────────────
-    emit_check_opcode('JZ')
+    begin_handler('JZ')
     emit_stack_pop_into("a")
     emit("GET TO THE CHOPPER result")
     emit("HERE IS MY INVITATION a")
@@ -584,11 +605,10 @@ def generate(mnm_source, sidecar_data, output_path=None,
     emit("BECAUSE I'M GOING TO SAY PLEASE result")   # nested if
     emit_set_jump()
     emit_end_if()   # end nested
-    emit_end_if()   # end JZ
-    emit()
+    end_handler()
 
     # ── JNZ (pop; if non-zero → jump) — uses nested if/else ─────────────
-    emit_check_opcode('JNZ')
+    begin_handler('JNZ')
     emit_stack_pop_into("a")
     emit("GET TO THE CHOPPER result")
     emit("HERE IS MY INVITATION a")
@@ -598,12 +618,10 @@ def generate(mnm_source, sidecar_data, output_path=None,
     emit("BULLSHIT")                                   # else (a!=0)
     emit_set_jump()
     emit_end_if()   # end nested
-    emit_end_if()   # end JNZ
-    emit()
+    end_handler()
 
     # ── CALL ─────────────────────────────────────────────────────────────
-    emit_check_opcode('CALL')
-    # Push ip+1 onto call stack
+    begin_handler('CALL')
     emit("GET TO THE CHOPPER a")
     emit("HERE IS MY INVITATION ip")
     emit("GET UP 1")
@@ -616,11 +634,10 @@ def generate(mnm_source, sidecar_data, output_path=None,
     emit("GET UP 1")
     emit("ENOUGH TALK")
     emit_set_jump()
-    emit_end_if()
-    emit()
+    end_handler()
 
     # ── RET ──────────────────────────────────────────────────────────────
-    emit_check_opcode('RET')
+    begin_handler('RET')
     emit("GET TO THE CHOPPER csp")
     emit("HERE IS MY INVITATION csp")
     emit("GET DOWN 1")
@@ -633,36 +650,31 @@ def generate(mnm_source, sidecar_data, output_path=None,
     emit("GET TO THE CHOPPER jumped")
     emit("HERE IS MY INVITATION 1")
     emit("ENOUGH TALK")
-    emit_end_if()
-    emit()
+    end_handler()
 
     # ── PRINT ────────────────────────────────────────────────────────────
-    emit_check_opcode('PRINT')
+    begin_handler('PRINT')
     emit_stack_pop_into("a")
     emit("TALK TO THE HAND a")
-    emit_end_if()
-    emit()
+    end_handler()
 
     # ── PRINT_STR ────────────────────────────────────────────────────────
     if strings:
-        emit_check_opcode('PRINT_STR')
+        begin_handler('PRINT_STR')
         emit("GET YOUR ASS TO MARS dummy")
         emit("DO IT NOW printStr operand")
-        emit_end_if()
-        emit()
+        end_handler()
 
     # ── EMIT_CHAR (best-effort: prints integer value) ────────────────────
-    emit_check_opcode('EMIT_CHAR')
+    begin_handler('EMIT_CHAR')
     emit_stack_pop_into("a")
     emit("TALK TO THE HAND a")
-    emit_end_if()
-    emit()
+    end_handler()
 
     # ── READ_INT ─────────────────────────────────────────────────────────
     if int_queues:
-        emit_check_opcode('READ_INT')
+        begin_handler('READ_INT')
         if num_queues == 1:
-            # Fast path: single queue
             emit("GET YOUR ASS TO MARS a")
             emit("DO IT NOW readIntVal operand iqp0")
             emit_stack_push_a()
@@ -671,14 +683,12 @@ def generate(mnm_source, sidecar_data, output_path=None,
             emit("GET UP 1")
             emit("ENOUGH TALK")
         else:
-            # Multi-queue: use getIqp helper
             iqp_args = " ".join(f"iqp{i}" for i in range(num_queues))
             emit("GET YOUR ASS TO MARS spTmp")
             emit(f"DO IT NOW getIqp operand {iqp_args}")
             emit("GET YOUR ASS TO MARS a")
             emit("DO IT NOW readIntVal operand spTmp")
             emit_stack_push_a()
-            # Advance the correct queue pointer
             for qi in range(num_queues):
                 emit("GET TO THE CHOPPER b")
                 emit(f"HERE IS MY INVITATION iqp{qi}")
@@ -686,8 +696,7 @@ def generate(mnm_source, sidecar_data, output_path=None,
                 emit("ENOUGH TALK")
                 emit(f"GET YOUR ASS TO MARS iqp{qi}")
                 emit(f"DO IT NOW condWrite operand {qi} iqp{qi} b")
-        emit_end_if()
-        emit()
+        end_handler()
 
     # ── NEWLINE (no-op: TALK TO THE HAND already appends \n) ────────────
     # Nothing to emit.
@@ -714,6 +723,11 @@ def generate(mnm_source, sidecar_data, output_path=None,
     # ═══════════════════════════════════════════════════════════════════════
     # C.  METHODS
     # ═══════════════════════════════════════════════════════════════════════
+
+    # ── Handler methods (static_fields mode only) ────────────────────────
+    if static_fields:
+        for _name, _lines in handler_methods:
+            lines.extend(_lines)
 
     # ── fetchOpcode(idx) ─────────────────────────────────────────────────
     emit("LISTEN TO ME VERY CAREFULLY fetchOpcode")
