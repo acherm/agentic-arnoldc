@@ -729,49 +729,110 @@ def generate(mnm_source, sidecar_data, output_path=None,
         for _name, _lines in handler_methods:
             lines.extend(_lines)
 
-    # ── fetchOpcode(idx) ─────────────────────────────────────────────────
-    emit("LISTEN TO ME VERY CAREFULLY fetchOpcode")
-    emit("I NEED YOUR CLOTHES YOUR BOOTS AND YOUR MOTORCYCLE idx")
-    emit("GIVE THESE PEOPLE AIR")
-    emit("HEY CHRISTMAS TREE result")
-    emit("YOU SET US UP 0")
-    emit("HEY CHRISTMAS TREE eq")
-    emit("YOU SET US UP 0")
-    for i in range(prog_size):
-        emit("GET TO THE CHOPPER eq")
-        emit("HERE IS MY INVITATION idx")
-        emit(f"YOU ARE NOT YOU YOU ARE ME {i}")
-        emit("ENOUGH TALK")
-        emit("BECAUSE I'M GOING TO SAY PLEASE eq")
-        emit("GET TO THE CHOPPER result")
-        emit(f"HERE IS MY INVITATION {enc_op[i]}")
-        emit("ENOUGH TALK")
-        emit_end_if()
-    emit("I'LL BE BACK result")
-    emit("HASTA LA VISTA, BABY")
-    emit()
+    # ── fetch helpers (split into chunks if > CHUNK_SIZE entries) ───────
+    FETCH_CHUNK = 2000  # ~25 bytes/entry → 50KB per chunk, safe under 64KB
 
-    # ── fetchOperand(idx) ────────────────────────────────────────────────
-    emit("LISTEN TO ME VERY CAREFULLY fetchOperand")
-    emit("I NEED YOUR CLOTHES YOUR BOOTS AND YOUR MOTORCYCLE idx")
-    emit("GIVE THESE PEOPLE AIR")
-    emit("HEY CHRISTMAS TREE result")
-    emit("YOU SET US UP 0")
-    emit("HEY CHRISTMAS TREE eq")
-    emit("YOU SET US UP 0")
-    for i in range(prog_size):
-        emit("GET TO THE CHOPPER eq")
-        emit("HERE IS MY INVITATION idx")
-        emit(f"YOU ARE NOT YOU YOU ARE ME {i}")
-        emit("ENOUGH TALK")
-        emit("BECAUSE I'M GOING TO SAY PLEASE eq")
-        emit("GET TO THE CHOPPER result")
-        emit(f"HERE IS MY INVITATION {enc_arg[i]}")
-        emit("ENOUGH TALK")
-        emit_end_if()
-    emit("I'LL BE BACK result")
-    emit("HASTA LA VISTA, BABY")
-    emit()
+    def emit_fetch_method(name, values):
+        """Emit a fetch method: name(idx) → values[idx].
+        Splits into sub-methods if needed to stay under JVM 64KB limit."""
+        n = len(values)
+        if n <= FETCH_CHUNK:
+            # Single method — fits in one chunk
+            emit(f"LISTEN TO ME VERY CAREFULLY {name}")
+            emit("I NEED YOUR CLOTHES YOUR BOOTS AND YOUR MOTORCYCLE idx")
+            emit("GIVE THESE PEOPLE AIR")
+            emit("HEY CHRISTMAS TREE result")
+            emit("YOU SET US UP 0")
+            emit("HEY CHRISTMAS TREE eq")
+            emit("YOU SET US UP 0")
+            for i in range(n):
+                emit("GET TO THE CHOPPER eq")
+                emit("HERE IS MY INVITATION idx")
+                emit(f"YOU ARE NOT YOU YOU ARE ME {i}")
+                emit("ENOUGH TALK")
+                emit("BECAUSE I'M GOING TO SAY PLEASE eq")
+                emit("GET TO THE CHOPPER result")
+                emit(f"HERE IS MY INVITATION {values[i]}")
+                emit("ENOUGH TALK")
+                emit_end_if()
+            emit("I'LL BE BACK result")
+            emit("HASTA LA VISTA, BABY")
+            emit()
+        else:
+            # Split into sub-methods
+            chunks = []
+            for start in range(0, n, FETCH_CHUNK):
+                end = min(start + FETCH_CHUNK, n)
+                chunks.append((start, end))
+
+            # Dispatcher: route idx to the correct chunk using if/else
+            emit(f"LISTEN TO ME VERY CAREFULLY {name}")
+            emit("I NEED YOUR CLOTHES YOUR BOOTS AND YOUR MOTORCYCLE idx")
+            emit("GIVE THESE PEOPLE AIR")
+            emit("HEY CHRISTMAS TREE result")
+            emit("YOU SET US UP 0")
+            emit("HEY CHRISTMAS TREE gt")
+            emit("YOU SET US UP 0")
+            if len(chunks) == 2:
+                boundary = chunks[0][1]
+                emit("GET TO THE CHOPPER gt")
+                emit("HERE IS MY INVITATION idx")
+                emit(f"LET OFF SOME STEAM BENNET {boundary - 1}")
+                emit("ENOUGH TALK")
+                emit("BECAUSE I'M GOING TO SAY PLEASE gt")
+                emit("GET YOUR ASS TO MARS result")
+                emit(f"DO IT NOW {name}C1 idx")
+                emit("BULLSHIT")
+                emit("GET YOUR ASS TO MARS result")
+                emit(f"DO IT NOW {name}C0 idx")
+                emit_end_if()
+            else:
+                # Cascade: check from last chunk down, first match wins
+                for ci in range(len(chunks) - 1, -1, -1):
+                    start, _ = chunks[ci]
+                    chunk_name = f"{name}C{ci}"
+                    if ci == 0:
+                        emit("GET YOUR ASS TO MARS result")
+                        emit(f"DO IT NOW {chunk_name} idx")
+                    else:
+                        emit("GET TO THE CHOPPER gt")
+                        emit("HERE IS MY INVITATION idx")
+                        emit(f"LET OFF SOME STEAM BENNET {start - 1}")
+                        emit("ENOUGH TALK")
+                        emit("BECAUSE I'M GOING TO SAY PLEASE gt")
+                        emit("GET YOUR ASS TO MARS result")
+                        emit(f"DO IT NOW {chunk_name} idx")
+                        emit_end_if()
+            emit("I'LL BE BACK result")
+            emit("HASTA LA VISTA, BABY")
+            emit()
+
+            # Sub-methods: each handles a range of indices
+            for ci, (start, end) in enumerate(chunks):
+                chunk_name = f"{name}C{ci}"
+                emit(f"LISTEN TO ME VERY CAREFULLY {chunk_name}")
+                emit("I NEED YOUR CLOTHES YOUR BOOTS AND YOUR MOTORCYCLE idx")
+                emit("GIVE THESE PEOPLE AIR")
+                emit("HEY CHRISTMAS TREE result")
+                emit("YOU SET US UP 0")
+                emit("HEY CHRISTMAS TREE eq")
+                emit("YOU SET US UP 0")
+                for i in range(start, end):
+                    emit("GET TO THE CHOPPER eq")
+                    emit("HERE IS MY INVITATION idx")
+                    emit(f"YOU ARE NOT YOU YOU ARE ME {i}")
+                    emit("ENOUGH TALK")
+                    emit("BECAUSE I'M GOING TO SAY PLEASE eq")
+                    emit("GET TO THE CHOPPER result")
+                    emit(f"HERE IS MY INVITATION {values[i]}")
+                    emit("ENOUGH TALK")
+                    emit_end_if()
+                emit("I'LL BE BACK result")
+                emit("HASTA LA VISTA, BABY")
+                emit()
+
+    emit_fetch_method("fetchOpcode", enc_op)
+    emit_fetch_method("fetchOperand", enc_arg)
 
     # ── stackRead(idx, p0 … pN) ─────────────────────────────────────────
     emit("LISTEN TO ME VERY CAREFULLY stackRead")
