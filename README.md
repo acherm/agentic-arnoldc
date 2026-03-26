@@ -480,8 +480,12 @@ ArnoldC only has `>` (`LET OFF SOME STEAM BENNET`) and `==` (`YOU ARE NOT YOU YO
 ### 6. Recursion Works
 Methods compile to JVM methods, so recursive calls (challenge 21 -- Fibonacci) work naturally via the JVM call stack.
 
-### 7. Hard Limit: 100 Local Variables Per Method
-ArnoldC's bytecode generator breaks when a method has more than **100 local variables** (parameters + declared variables). At exactly 101 locals, compilation succeeds but the JVM rejects the class with `StackMapTable format error` or `Arguments can't fit into locals`. This was discovered while building the BF interpreter: storing 111 program slots as main-method variables failed. **Solution:** hardcode program data as constants inside a method's if/else chain, removing the variables entirely.
+### 7. Hard Limit: 100 Local Variables Per Method (Fixable!)
+ArnoldC's bytecode generator breaks when a method has more than **100 local variables** (parameters + declared variables). At exactly 101 locals, compilation succeeds but the JVM rejects the class with `StackMapTable format error` or `Arguments can't fit into locals`. This was discovered while building the BF interpreter: storing 111 program slots as main-method variables failed. **Workaround:** hardcode program data as constants inside a method's if/else chain, removing the variables entirely.
+
+**Root cause:** The limit comes from a hardcoded `visitMaxs(100, 100)` in three places in the ArnoldC source (`MainMethodNode.scala`, `MethodNode.scala`, `RootNode.scala`), combined with `ClassWriter(0)` which tells ASM to trust these values instead of computing them. The JVM itself supports up to 65,535 local variables. This bug was never reported in ArnoldC's issue tracker — nobody had pushed the language this far before.
+
+**One-line fix:** Changing `ClassWriter(0)` to `ClassWriter(ClassWriter.COMPUTE_FRAMES)` in `RootNode.scala` lets ASM automatically compute correct `max_locals`, `max_stack`, and StackMapTable entries. A patched JAR (`ArnoldC-patched.jar`) is included in this repository and passes all 73 tests. Programs with 120+ variables compile and run correctly. The remaining hard limit is the JVM's own 64KB method body size, which kicks in around 150+ variables with complex control flow.
 
 ### 8. The Tiny VM is Peak ArnoldC
 Challenge 22 implements a virtual machine *inside* an esoteric language. The VM supports 6 opcodes (PUSH, ADD, SUB, MUL, PRINT, HALT) using a chain of equality checks -- essentially a switch-case built from `YOU ARE NOT YOU YOU ARE ME`.
