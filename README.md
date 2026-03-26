@@ -1,6 +1,6 @@
 # Agentic ArnoldC
 
-25 programming challenges, a Brainfuck interpreter, an MnM Lang interpreter, and automated test suites -- all in **[ArnoldC](https://github.com/lhartikk/ArnoldC)**, the esoteric programming language where every keyword is an Arnold Schwarzenegger movie quote.
+25 programming challenges, a Brainfuck interpreter, an MnM Lang interpreter, a triple-interpreter chain (ArnoldC→MnM→BF), compiler patches, and automated test suites -- all in **[ArnoldC](https://github.com/lhartikk/ArnoldC)**, the esoteric programming language where every keyword is an Arnold Schwarzenegger movie quote.
 
 Everything was written, compiled, debugged, and verified by AI agents (Claude) in a single conversation.
 
@@ -46,9 +46,13 @@ ArnoldC is an imperative programming language that compiles to JVM bytecode. Its
 ├── brainfuck.arnoldc                                # BF interpreter (generated)
 ├── generate_bf_interpreter.py                       # Python generator for BF interpreter
 ├── test_bf.py                                       # Automated test suite (38 BF tests)
-├── generate_mnm_interpreter.py                      # Python generator for MnM Lang interpreter
+├── mnm_vm.arnoldc                                   # True MnM interpreter (fixed, reads from stdin)
+├── build_mnm_vm.py                                  # Generates mnm_vm.arnoldc (run once)
+├── mnm_to_stdin.py                                  # Converts .mnm+.json to stdin integer stream
+├── test_mnm_vm.py                                   # Test suite for true interpreter (16 tests)
+├── generate_mnm_interpreter.py                      # MnM→ArnoldC compiler (alternative approach)
 ├── generate_mnm_bf.py                               # BF→MnM→ArnoldC triple-chain generator
-├── test_mnm.py                                      # Automated test suite (35 MnM tests)
+├── test_mnm.py                                      # Test suite for compiler approach (35 tests)
 ├── mnm_examples/                                    # MnM Lang example programs
 │   ├── hello_world.mnm / .mnm.json
 │   ├── factorial.mnm / .mnm.json
@@ -301,25 +305,58 @@ python3 test_mnm.py
 35/35 passed
 ```
 
-### Architecture Limitation: Compiler vs Interpreter
+### Two approaches: Compiler vs Interpreter
 
-There is an important architectural honesty to note. The Brainfuck interpreter (`brainfuck.arnoldc`) is a **genuine ArnoldC interpreter**: a single ArnoldC program that contains the full interpreter logic — main loop, instruction dispatch, tape manipulation, bracket matching. The Python generator is merely a convenience that embeds a specific BF program into this fixed template. The template itself is always the same shape; only the data changes.
+This project implements MnM execution in ArnoldC **two different ways**:
 
-The MnM "interpreter" is fundamentally different. There is **no standalone ArnoldC program that interprets MnM**. The Python generator (`generate_mnm_interpreter.py`) produces *different ArnoldC code* depending on the input: different stack sizes, different variable counts, different method signatures, different string tables. What we built is a **compiler** (MnM → ArnoldC), not an interpreter. The generated ArnoldC doesn't interpret MnM — it *is* the MnM program translated into ArnoldC.
+**Approach 1: Compiler** (`generate_mnm_interpreter.py`)
 
-**Why the difference?** BF is tiny (8 opcodes, one tape) so a fixed interpreter template works. MnM has 37 opcodes, a value stack, named variables, a call stack, string literals, and input queues — each requiring if/else chains whose shape depends on the input program. ArnoldC's lack of arrays means these chain sizes must be fixed at compile time.
+The Python generator produces *different ArnoldC code* per input: different stack sizes, different variable counts, different method signatures, different string tables. The generated ArnoldC doesn't interpret MnM — it *is* the MnM program translated into ArnoldC. This approach supports more MnM features (strings, multiple input queues) and produces faster code, but requires Python at build time.
 
-### Roadmap: A True MnM Interpreter in ArnoldC
+**Approach 2: True Interpreter** ([`mnm_vm.arnoldc`](mnm_vm.arnoldc))
 
-Building a genuine single-file MnM interpreter in ArnoldC — matching the BF interpreter's architecture — is feasible with the patched compiler. The approach:
+A single, fixed 7,319-line ArnoldC program that reads **any** MnM program from stdin and executes it — architecturally identical to `brainfuck.arnoldc`. The same file handles factorial, fizzbuzz, countdown, or any program within its limits. No Python in the loop at runtime.
 
-1. **Fix maximum sizes**: pre-allocate a stack of N cells, M variable slots, P instruction slots (e.g., N=50, M=100, P=200)
-2. **Read program from stdin**: the MnM program (opcodes + operands) is fed as integer pairs via `I WANT TO ASK YOU A BUNCH OF QUESTIONS AND I WANT TO HAVE THEM ANSWERED IMMEDIATELY`, followed by sidecar data (variable initial values, input queue values)
-3. **Static fields**: with the patched compiler, all pre-allocated slots become static fields — no local variable limit, and helper methods can access them directly
-4. **Rewrite varRead/stackRead to use GETSTATIC**: eliminate the 254-parameter limit by having read methods access fields directly via if/else chains instead of receiving values as parameters
-5. **Fixed opcode dispatch**: the 30 opcode handlers are the same regardless of the input program — only the data (instructions, variables) changes
+| | `brainfuck.arnoldc` | `mnm_vm.arnoldc` | `generate_mnm_interpreter.py` |
+|---|---|---|---|
+| **Type** | Interpreter | Interpreter | Compiler |
+| **Fixed code?** | Yes (data embedded) | Yes (data from stdin) | No (output varies per input) |
+| **Array simulation** | Params to methods | Static fields + GETSTATIC | Params (condWrite pattern) |
+| **Limits** | Tape/program pre-sized | 100 instr, 30 stack, 50 vars | Scales to input |
+| **String support** | N/A | No | Yes (PRINT\_STR) |
+| **Tests** | 38 pass | 16 pass | 35 pass |
 
-The result would be a single ~5,000+ line ArnoldC program that reads any MnM program from stdin and executes it — a true interpreter, not a compiled output. It would be slow (O(N) per array access, O(P) per instruction fetch) and limited to the pre-allocated sizes, but architecturally identical to `brainfuck.arnoldc`.
+### How `mnm_vm.arnoldc` works
+
+The true interpreter required solving every constraint that previously forced the compiler approach:
+
+1. **No arrays → static fields**: all 320+ pre-allocated slots (100 program opcodes, 100 operands, 30 stack cells, 50 variables, 10 call stack, 10 input queue) are stored as JVM static fields. Read/write methods access them via `GETSTATIC`/`PUTSTATIC` through if/else chains — no parameters needed, no 254-param limit.
+
+2. **Program from stdin**: on startup, the interpreter reads integers via `I WANT TO ASK YOU A BUNCH OF QUESTIONS AND I WANT TO HAVE THEM ANSWERED IMMEDIATELY` — first the instruction count, then opcode/operand pairs, then variable initial values, then input queue values. Each value is stored into the corresponding static field via a write method.
+
+3. **Void write methods**: `stackW`, `varW`, `csW` are void methods (no `GIVE THESE PEOPLE AIR`) called with just `DO IT NOW stackW sp val`. No dummy return variables needed.
+
+4. **Fixed opcode dispatch**: the 25 opcode handlers are identical regardless of the input program. Each handler is ~10–15 lines of ArnoldC (just method calls to stackR/stackW/varR/varW), compared to hundreds of lines in the compiler approach.
+
+### Using `mnm_vm.arnoldc`
+
+```bash
+# Compile once (requires patched compiler):
+java -jar ArnoldC-patched.jar mnm_vm.arnoldc
+
+# Convert any MnM program to stdin format:
+python3 mnm_to_stdin.py mnm_examples/factorial.mnm mnm_examples/factorial.mnm.json > /tmp/input.txt
+
+# Run (staggered delivery for ArnoldC's Scanner-per-read quirk):
+(while IFS= read -r line; do echo "$line"; sleep 0.1; done < /tmp/input.txt) | java mnm_vm
+# Output: 120
+```
+
+### Limitations
+
+- **Fixed sizes**: 100 instructions, 30 stack, 50 variables, 10 call stack, 10 input queue. Programs exceeding these limits fail silently. Use the compiler approach for larger programs.
+- **No string support**: PRINT\_STR, PUSH\_STR, CONCAT etc. require compile-time string literals. The true interpreter can only handle numeric operations.
+- **Stdin delivery**: ArnoldC creates a new `Scanner(System.in)` per read, requiring staggered delivery (`sleep 0.1` between values). Reading 46 values for factorial takes ~4.6 seconds of I/O overhead.
 
 ## Triple Interpreter: ArnoldC → MnM → Brainfuck
 
@@ -676,6 +713,7 @@ All programs were generated by **Claude (Anthropic)**:
 5. **MnM Lang interpreter:** Extended the generator architecture to handle MnM Lang's 30-opcode stack machine — stack, variables, call stack, input queues, and string output — all simulated in ArnoldC's integer-only type system. Verified with 35 automated tests
 6. **Triple interpreter chain:** Built `generate_mnm_bf.py` to create minimal MnM BF interpreters for specific BF programs, achieving ArnoldC interpreting MnM interpreting Brainfuck. Worked around ArnoldC's 100-local-variable limit by generating tailored, compact programs
 7. **Compiler patches:** Traced the 100-variable limit to a hardcoded `visitMaxs(100, 100)` — one-line fix. Then hit the JVM 64KB method body limit at 150 variables. Solved by a deeper compiler change: main-scope variables stored as static fields (`PUTSTATIC`/`GETSTATIC`) so handler methods can access them directly, enabling method splitting. Both bugs were never reported — first known diagnosis and fix
+8. **True MnM interpreter:** Recognized that the compiler approach (`generate_mnm_interpreter.py`) was architecturally different from the BF interpreter — it generated different ArnoldC per input, not a fixed program. Built `mnm_vm.arnoldc`: a single 7,319-line ArnoldC program that reads any MnM program from stdin and executes it. Uses static fields for all state (320+ pre-allocated slots), void write methods, and GETSTATIC-based reads — eliminating every limit that previously forced the compiler approach. Verified with 16 automated tests
 
 ## License
 
