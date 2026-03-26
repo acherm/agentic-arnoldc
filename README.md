@@ -185,7 +185,7 @@ The result: **a working, tested interpreter for a Turing-complete language, writ
 
 [MnM Lang](https://github.com/mufeedvh/mnmlang) is an esoteric programming language where source code is a grid of colored M&M candies. It's a stack-based VM with 37 opcodes across 6 color families. Programs come with a `.mnm.json` sidecar file containing strings, variables, and input queues.
 
-The MnM interpreter follows the same architecture as the Brainfuck interpreter: a Python generator ([`generate_mnm_interpreter.py`](generate_mnm_interpreter.py)) takes a `.mnm` program + sidecar and produces a tailored ArnoldC file that executes it.
+A Python generator ([`generate_mnm_interpreter.py`](generate_mnm_interpreter.py)) takes a `.mnm` program + sidecar and produces a tailored ArnoldC file that executes it. Unlike the Brainfuck interpreter (which is a single fixed ArnoldC program), this is a **compiler** rather than an interpreter — the generated ArnoldC varies in shape depending on the input program's resource requirements. See [Architecture Limitation](#architecture-limitation-compiler-vs-interpreter) for why, and the roadmap toward a true single-file interpreter.
 
 ### Why a Generator, Not a Single Generic Interpreter?
 
@@ -300,6 +300,26 @@ python3 test_mnm.py
 
 35/35 passed
 ```
+
+### Architecture Limitation: Compiler vs Interpreter
+
+There is an important architectural honesty to note. The Brainfuck interpreter (`brainfuck.arnoldc`) is a **genuine ArnoldC interpreter**: a single ArnoldC program that contains the full interpreter logic — main loop, instruction dispatch, tape manipulation, bracket matching. The Python generator is merely a convenience that embeds a specific BF program into this fixed template. The template itself is always the same shape; only the data changes.
+
+The MnM "interpreter" is fundamentally different. There is **no standalone ArnoldC program that interprets MnM**. The Python generator (`generate_mnm_interpreter.py`) produces *different ArnoldC code* depending on the input: different stack sizes, different variable counts, different method signatures, different string tables. What we built is a **compiler** (MnM → ArnoldC), not an interpreter. The generated ArnoldC doesn't interpret MnM — it *is* the MnM program translated into ArnoldC.
+
+**Why the difference?** BF is tiny (8 opcodes, one tape) so a fixed interpreter template works. MnM has 37 opcodes, a value stack, named variables, a call stack, string literals, and input queues — each requiring if/else chains whose shape depends on the input program. ArnoldC's lack of arrays means these chain sizes must be fixed at compile time.
+
+### Roadmap: A True MnM Interpreter in ArnoldC
+
+Building a genuine single-file MnM interpreter in ArnoldC — matching the BF interpreter's architecture — is feasible with the patched compiler. The approach:
+
+1. **Fix maximum sizes**: pre-allocate a stack of N cells, M variable slots, P instruction slots (e.g., N=50, M=100, P=200)
+2. **Read program from stdin**: the MnM program (opcodes + operands) is fed as integer pairs via `I WANT TO ASK YOU A BUNCH OF QUESTIONS AND I WANT TO HAVE THEM ANSWERED IMMEDIATELY`, followed by sidecar data (variable initial values, input queue values)
+3. **Static fields**: with the patched compiler, all pre-allocated slots become static fields — no local variable limit, and helper methods can access them directly
+4. **Rewrite varRead/stackRead to use GETSTATIC**: eliminate the 254-parameter limit by having read methods access fields directly via if/else chains instead of receiving values as parameters
+5. **Fixed opcode dispatch**: the 30 opcode handlers are the same regardless of the input program — only the data (instructions, variables) changes
+
+The result would be a single ~5,000+ line ArnoldC program that reads any MnM program from stdin and executes it — a true interpreter, not a compiled output. It would be slow (O(N) per array access, O(P) per instruction fetch) and limited to the pre-allocated sizes, but architecturally identical to `brainfuck.arnoldc`.
 
 ## Triple Interpreter: ArnoldC → MnM → Brainfuck
 
