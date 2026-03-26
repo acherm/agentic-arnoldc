@@ -486,7 +486,7 @@ ArnoldC's bytecode generator breaks when a method has more than **100 local vari
 
 **Root cause:** The limit comes from a hardcoded `visitMaxs(100, 100)` in three places in the ArnoldC source (`MainMethodNode.scala`, `MethodNode.scala`, `RootNode.scala`), combined with `ClassWriter(0)` which tells ASM to trust these values instead of computing them. The JVM itself supports up to 65,535 local variables. This bug was never reported in ArnoldC's issue tracker — nobody had pushed the language this far before.
 
-**One-line fix:** Changing `ClassWriter(0)` to `ClassWriter(ClassWriter.COMPUTE_FRAMES)` in `RootNode.scala` lets ASM automatically compute correct `max_locals`, `max_stack`, and StackMapTable entries. A patched JAR (`ArnoldC-patched.jar`) is included in this repository and passes all 73 tests. Programs with 120+ variables compile and run correctly. The remaining hard limit is the JVM's own 64KB method body size, which kicks in around 150+ variables with complex control flow.
+**Fixes:** (1) Changing `ClassWriter(0)` to `ClassWriter(ClassWriter.COMPUTE_FRAMES)` removes the 100-variable limit. (2) Storing main-scope variables as static fields (`PUTSTATIC`/`GETSTATIC` instead of `ISTORE`/`ILOAD`) lets methods access them directly, enabling handler splitting that defeats the JVM's 64KB method body limit. Both fixes are included in `ArnoldC-patched.jar`. Programs with 150+ variables now compile and run correctly. See [Patching the ArnoldC Compiler](#patching-the-arnoldc-compiler) for the full story.
 
 ### 8. The Tiny VM is Peak ArnoldC
 Challenge 22 implements a virtual machine *inside* an esoteric language. The VM supports 6 opcodes (PUSH, ADD, SUB, MUL, PRINT, HALT) using a chain of equality checks -- essentially a switch-case built from `YOU ARE NOT YOU YOU ARE ME`.
@@ -550,30 +550,57 @@ When a method uses local slot 100+, the JVM sees `max_locals=100` in the Code at
 
 With `COMPUTE_FRAMES`, ASM automatically computes correct `max_locals`, `max_stack`, and StackMapTable entries from the actual bytecode. The hardcoded `visitMaxs(100, 100)` and all 14 manual `visitFrame()` calls across 8 source files become effectively no-ops.
 
-### Results
+### Results (COMPUTE_FRAMES only)
 
-| Variables | Original compiler | Patched compiler |
-|-----------|-------------------|------------------|
+| Variables | Original compiler | COMPUTE_FRAMES patch |
+|-----------|-------------------|----------------------|
 | ≤ 100 | Works | Works |
 | 120 | `VerifyError: Local index 100 is invalid` | Works correctly |
 | 150 | `NullPointerException` in ASM | Compiles, but hits JVM's 64KB method body limit |
 | All 73 tests | 73/73 pass | 73/73 pass |
 
-The patched compiler (`ArnoldC-patched.jar`) is included in this repository. The remaining hard limit is the JVM's own 64KB method body size — when a main loop with 150+ variable `condWrite` calls generates more than 65,535 bytes of bytecode, the JVM rejects the class. This is not fixable in ArnoldC; it's a JVM specification constraint. It's why the generator approach (producing compact, tailored programs) remains valuable even with the patch.
+This fixes the 100-variable limit but reveals a second wall: the JVM specification requires method bodies to be under 65,535 bytes (§4.7.3). With 150 variables and 30 opcode handlers each containing N `condWrite` calls, the main method generates 70,016 bytes — just over the limit.
+
+### Defeating the 64KB method limit: static fields + handler splitting
+
+The 64KB limit is a hard JVM spec constraint, but it's per-method. The fix is to **split the main method** by moving opcode handlers into separate methods. This requires a second compiler change: storing main-scope variables as **static fields** instead of local variables.
+
+With local variables (`ISTORE`/`ILOAD`), called methods cannot access the caller's state — every value must be passed as a parameter and returned. With static fields (`PUTSTATIC`/`GETSTATIC`), any method can read and write main-scope variables directly, making handler splitting trivial.
+
+**Compiler changes** (7 files modified in the ArnoldC Scala source):
+- `SymbolTable.scala`: tracks which variables are fields, adds `emitVarLoad`/`emitVarStore` helpers that emit `GETSTATIC`/`PUTSTATIC` for main-scope variables and `ILOAD`/`ISTORE` for method-local parameters
+- `RootNode.scala`: enables field mode, calls `ClassWriter.visitField` for each main-scope variable
+- `DeclareIntNode.scala`, `VariableNode.scala`, `AssignVariableNode.scala`, `CallMethodNode.scala`, `CallReadMethodNode.scala`: use `emitVarLoad`/`emitVarStore` instead of raw `ILOAD`/`ISTORE`
+
+**Generator change** (`generate_mnm_interpreter.py`): new `static_fields=True` mode. Each opcode handler becomes a separate ArnoldC method. The main loop shrinks to: fetch instruction → check opcode → call handler method → advance ip. Each handler method accesses `sp`, `s0`–`sN`, `v0`–`vK`, `jumped`, etc. as static fields.
+
+### Final results
+
+| Variables | Original | COMPUTE_FRAMES | + Static fields |
+|-----------|----------|----------------|-----------------|
+| ≤ 100 | Works | Works | Works |
+| 120 | `VerifyError` | Works | Works |
+| 150 | `NullPointerException` | 64KB method limit | **Works** |
+| All 73 tests | 73/73 pass | 73/73 pass | 73/73 pass |
+
+The 150-variable MnM BF interpreter (33,281 lines of ArnoldC) now compiles and runs correctly, producing the expected output. The patched compiler (`ArnoldC-patched.jar`) includes both fixes.
 
 ### Building the patched compiler
 
 The ArnoldC project dates from ~2014 and its build config needs modernization. Three things must be fixed: the one-line compiler patch, outdated SBT plugin versions, and an unavailable speech synthesis dependency.
 
-**1. Clone and apply the bytecode fix:**
+**1. Clone and apply the fixes:**
 
 ```bash
 git clone https://github.com/lhartikk/ArnoldC.git
 cd ArnoldC
 
+# Fix 1: COMPUTE_FRAMES (removes 100-variable limit)
 sed -i '' 's/new ClassWriter(0)/new ClassWriter(ClassWriter.COMPUTE_FRAMES)/' \
   src/main/scala/org/arnoldc/ast/RootNode.scala
 ```
+
+For the static fields fix (removes 64KB method limit), the changes to `SymbolTable.scala` and the 5 AST node files are more extensive — see the [patched source files](https://github.com/acherm/agentic-arnoldc) or the commit history for the full diff. The key change is replacing every `mv.visitVarInsn(ISTORE, symbolTable.getVariableAddress(var))` with `symbolTable.emitVarStore(mv, var)` (and likewise for `ILOAD` → `emitVarLoad`), where the new methods choose between field and local access based on scope.
 
 **2. Update SBT plugins** (`project/plugins.sbt`): the original uses `sbt-idea 1.5.1` (defunct IntelliJ plugin) and `sbt-assembly 0.10.1` (incompatible with modern SBT). Replace with:
 
@@ -623,7 +650,7 @@ All programs were generated by **Claude (Anthropic)**:
 4. **BF test suite:** Built an automated harness comparing ArnoldC BF output against the reference `brainfuck` interpreter across 38 test cases covering 8 categories, from trivial programs to Hello World (111 instructions)
 5. **MnM Lang interpreter:** Extended the generator architecture to handle MnM Lang's 30-opcode stack machine — stack, variables, call stack, input queues, and string output — all simulated in ArnoldC's integer-only type system. Verified with 35 automated tests
 6. **Triple interpreter chain:** Built `generate_mnm_bf.py` to create minimal MnM BF interpreters for specific BF programs, achieving ArnoldC interpreting MnM interpreting Brainfuck. Worked around ArnoldC's 100-local-variable limit by generating tailored, compact programs
-7. **Compiler patch:** Traced the 100-variable limit to a hardcoded `visitMaxs(100, 100)` in the ArnoldC Scala source. One-line fix (`ClassWriter(0)` → `ClassWriter(ClassWriter.COMPUTE_FRAMES)`) eliminates the limit entirely. Never reported before — first known diagnosis and fix of this bug
+7. **Compiler patches:** Traced the 100-variable limit to a hardcoded `visitMaxs(100, 100)` — one-line fix. Then hit the JVM 64KB method body limit at 150 variables. Solved by a deeper compiler change: main-scope variables stored as static fields (`PUTSTATIC`/`GETSTATIC`) so handler methods can access them directly, enabling method splitting. Both bugs were never reported — first known diagnosis and fix
 
 ## License
 
