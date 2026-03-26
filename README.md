@@ -563,18 +563,55 @@ The patched compiler (`ArnoldC-patched.jar`) is included in this repository. The
 
 ### Building the patched compiler
 
+The ArnoldC project dates from ~2014 and its build config needs modernization. Three things must be fixed: the one-line compiler patch, outdated SBT plugin versions, and an unavailable speech synthesis dependency.
+
+**1. Clone and apply the bytecode fix:**
+
 ```bash
 git clone https://github.com/lhartikk/ArnoldC.git
 cd ArnoldC
 
-# Apply the one-line fix
 sed -i '' 's/new ClassWriter(0)/new ClassWriter(ClassWriter.COMPUTE_FRAMES)/' \
   src/main/scala/org/arnoldc/ast/RootNode.scala
+```
 
-# Build (requires sbt; FreeTTS speech deps may need stubbing)
+**2. Update SBT plugins** (`project/plugins.sbt`): the original uses `sbt-idea 1.5.1` (defunct IntelliJ plugin) and `sbt-assembly 0.10.1` (incompatible with modern SBT). Replace with:
+
+```sbt
+addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "2.1.1")
+```
+
+**3. Remove speech synthesis dependency:** ArnoldC includes a `-declaim` feature that uses FreeTTS/JSAPI to speak programs in Arnold's voice. These libraries are no longer available in public Maven repositories. The solution is to remove the FreeTTS dependencies from `build.sbt` and stub out `Declaimer.scala`:
+
+In `build.sbt`, remove the `javax.speech` and `org.mobicents.external.freetts` dependencies and the `"Speech"` resolver. Replace the `assemblySettings` / `AssemblyKeys._` imports (old sbt-assembly API) with:
+
+```sbt
+assembly / mainClass := Some("org.arnoldc.ArnoldC")
+assembly / assemblyMergeStrategy := {
+  case PathList("META-INF", _*) => MergeStrategy.discard
+  case _ => MergeStrategy.first
+}
+```
+
+Replace `src/main/scala/org/arnoldc/Declaimer.scala` with a stub:
+
+```scala
+package org.arnoldc
+import org.arnoldc.ast._
+object Declaimer {
+  def declaim(root: RootNode, outputFile: String): Unit =
+    throw new UnsupportedOperationException("Speech synthesis not available in patched build")
+}
+```
+
+**4. Build:**
+
+```bash
 sbt assembly
 # Output: target/scala-2.11/ArnoldC-assembly-*.jar
 ```
+
+The resulting JAR is ~6 MB (vs 12 MB original, since FreeTTS is gone). All compiler functionality is preserved — only the `-declaim` speech feature is disabled.
 
 ## How This Was Made
 
