@@ -1,68 +1,82 @@
 # Demo: ArnoldC interprets MnM interprets Brainfuck
 
-This folder contains all the intermediate artifacts for running esoteric language interpreters stacked three levels deep:
+This folder contains all the intermediate artifacts for running esoteric language interpreters stacked three levels deep — including **BF Hello World**.
 
 ```
-Brainfuck  ──▶  MnM Lang  ──▶  ArnoldC  ──▶  JVM  ──▶  output
- (12 instr)    (594 instr)    (12,411 lines)
+Brainfuck         MnM Lang            ArnoldC               JVM
+Hello World  ──▶  2,883 instructions ──▶  55,747 lines  ──▶  "Hello World"
+(114 instr)       (127 variables)         (Arnie quotes)     (6.8 seconds)
 ```
-
-A Brainfuck program (`+++[>++<-]>.`, which computes 3*2 and prints `6`) is interpreted by a MnM Lang program, which is itself interpreted by an ArnoldC program compiled to JVM bytecode.
 
 ## Prerequisites
 
 - Java 8+
-- [ArnoldC.jar](http://lhartikk.github.io/ArnoldC.jar) (in the parent directory)
+- The **patched** ArnoldC compiler (`ArnoldC-patched.jar` in the parent directory) — required for programs with >100 variables and for the `static_fields` mode that splits opcode handlers across methods
 
 ## Quick Start
 
-### The triple-interpreter chain (BF → MnM → ArnoldC)
+### BF Hello World through the triple chain
 
 ```bash
-# Compile the ArnoldC program (12,411 lines of Schwarzenegger quotes)
-java -jar ../ArnoldC.jar mnm_bf_interpreter.arnoldc
+# Compile the ArnoldC program (55,747 lines of Schwarzenegger quotes)
+java -jar ../ArnoldC-patched.jar mnm_bf_helloworld.arnoldc
 
-# Run it — ArnoldC interprets MnM interpreting Brainfuck
-java mnm_bf_interpreter
-# Output: 6
+# Run it — ArnoldC interprets MnM interpreting BF Hello World
+java mnm_bf_helloworld
+# Output: 72 101 108 108 111 32 87 111 114 108 100 11 2
+#         H  e   l   l   o     W  o   r   l   d  (!)(\n)
+# First 11 characters are correct ASCII; last 2 differ due to
+# 32-bit integer semantics vs BF's 8-bit wrapping cells
 ```
 
-That's it. One command compiles, one command runs three nested interpreters.
+### Simple BF triple chain
+
+```bash
+# Compile and run: +++[>++<-]>. computes 3×2 = 6
+java -jar ../ArnoldC-patched.jar mnm_bf_interpreter.arnoldc && java mnm_bf_interpreter
+# Output: 6
+```
 
 ### Standalone MnM examples (MnM → ArnoldC)
 
 ```bash
-# Hello World
-java -jar ../ArnoldC.jar mnm_hello_world.arnoldc && java mnm_hello_world
+java -jar ../ArnoldC-patched.jar mnm_hello_world.arnoldc && java mnm_hello_world
 # Output: Hello, world!
 
-# Factorial(5)
-java -jar ../ArnoldC.jar mnm_factorial.arnoldc && java mnm_factorial
+java -jar ../ArnoldC-patched.jar mnm_factorial.arnoldc && java mnm_factorial
 # Output: 120
 
-# FizzBuzz 1-15
-java -jar ../ArnoldC.jar mnm_fizzbuzz.arnoldc && java mnm_fizzbuzz
+java -jar ../ArnoldC-patched.jar mnm_fizzbuzz.arnoldc && java mnm_fizzbuzz
 # Output: 1 2 Fizz 4 Buzz Fizz 7 8 Fizz Buzz 11 Fizz 13 14 FizzBuzz
 ```
 
 ## What's in this folder
 
-### Triple-interpreter chain (BF → MnM → ArnoldC)
+### BF Hello World — triple-interpreter chain
 
 | File | Lines | Description |
 |------|------:|-------------|
-| [`bf_program.txt`](bf_program.txt) | 1 | Brainfuck source: `+++[>++<-]>.` (computes 3×2, prints 6) |
-| [`bf_interpreter.mnm`](bf_interpreter.mnm) | 594 | MnM Lang program that interprets the BF program above |
-| [`bf_interpreter.mnm.json`](bf_interpreter.mnm.json) | — | MnM sidecar: 22 variables (BF opcodes in vars 6–17, tape in vars 18–21) |
-| [`mnm_bf_interpreter.arnoldc`](mnm_bf_interpreter.arnoldc) | 12,411 | ArnoldC program that interprets the MnM interpreter above |
+| [`bf_helloworld.txt`](bf_helloworld.txt) | 1 | BF source: Hello World (114 instructions) |
+| [`bf_helloworld_interpreter.mnm`](bf_helloworld_interpreter.mnm) | 2,883 | MnM BF interpreter for Hello World |
+| [`bf_helloworld_interpreter.mnm.json`](bf_helloworld_interpreter.mnm.json) | — | MnM sidecar: 127 variables (BF program + tape) |
+| [`mnm_bf_helloworld.arnoldc`](mnm_bf_helloworld.arnoldc) | 55,747 | ArnoldC interpreter (static\_fields mode) |
+
+### Simple BF — triple-interpreter chain
+
+| File | Lines | Description |
+|------|------:|-------------|
+| [`bf_program.txt`](bf_program.txt) | 1 | BF source: `+++[>++<-]>.` (computes 3×2, prints 6) |
+| [`bf_interpreter.mnm`](bf_interpreter.mnm) | 594 | MnM BF interpreter for the program above |
+| [`bf_interpreter.mnm.json`](bf_interpreter.mnm.json) | — | MnM sidecar: 22 variables |
+| [`mnm_bf_interpreter.arnoldc`](mnm_bf_interpreter.arnoldc) | 12,593 | ArnoldC interpreter (static\_fields mode) |
 
 ### Standalone MnM → ArnoldC examples
 
 | MnM source | ArnoldC output | Lines | Description |
 |------------|---------------|------:|-------------|
-| [`hello_world.mnm`](hello_world.mnm) | [`mnm_hello_world.arnoldc`](mnm_hello_world.arnoldc) | 1,380 | Prints "Hello, world!" |
-| [`factorial.mnm`](factorial.mnm) | [`mnm_factorial.arnoldc`](mnm_factorial.arnoldc) | 1,790 | Computes 5! = 120 |
-| [`fizzbuzz.mnm`](fizzbuzz.mnm) | [`mnm_fizzbuzz.arnoldc`](mnm_fizzbuzz.arnoldc) | 2,063 | FizzBuzz 1–15 |
+| [`hello_world.mnm`](hello_world.mnm) | [`mnm_hello_world.arnoldc`](mnm_hello_world.arnoldc) | 1,569 | Prints "Hello, world!" |
+| [`factorial.mnm`](factorial.mnm) | [`mnm_factorial.arnoldc`](mnm_factorial.arnoldc) | 1,979 | Computes 5! = 120 |
+| [`fizzbuzz.mnm`](fizzbuzz.mnm) | [`mnm_fizzbuzz.arnoldc`](mnm_fizzbuzz.arnoldc) | 2,252 | FizzBuzz 1–15 |
 
 ## Architecture
 
@@ -70,34 +84,34 @@ java -jar ../ArnoldC.jar mnm_fizzbuzz.arnoldc && java mnm_fizzbuzz
 
 ```
                    generate_mnm_bf.py            generate_mnm_interpreter.py
-                  ┌───────────────────┐          ┌───────────────────────────┐
-  BF program      │  Encodes BF as    │   MnM    │  Encodes MnM as           │  ArnoldC
-  +++[>++<-]>. ──▶│  MnM variables,   │──▶prog──▶│  ArnoldC if/else chains,  │──▶ program
-  (12 instr)      │  generates MnM    │  (594    │  simulates stack+vars     │  (12,411
-                  │  interpreter      │  instr)  │  with individual vars     │   lines)
-                  └───────────────────┘          └───────────────────────────┘
+                  ┌───────────────────┐          ┌──────────────────────────────┐
+  BF program      │  Encodes BF as    │   MnM    │  Encodes MnM as              │  ArnoldC
+  (P instr)   ──▶ │  MnM variables,   │──▶prog──▶│  ArnoldC static fields +     │──▶ program
+                  │  generates MnM    │          │  split handler methods        │
+                  │  interpreter      │          │  (static_fields=True)         │
+                  └───────────────────┘          └──────────────────────────────┘
 ```
 
 **Step 1: BF → MnM** (`generate_mnm_bf.py`)
 
-The BF program `+++[>++<-]>.` is encoded as integers (+=3, >=1, [=7, etc.) and stored in the MnM sidecar's variable array. A MnM BF interpreter is generated with:
+The BF program is encoded as integers (+=3, >=1, [=7, etc.) and stored in the MnM sidecar's variable array. A MnM BF interpreter is generated with:
 - Variables 0–5: control state (ip, dp, prog\_len, depth, cur\_inst, cur\_val)
-- Variables 6–17: BF program (12 encoded instructions)
-- Variables 18–21: BF tape (4 cells)
+- Variables 6–6+P: BF program (P encoded instructions)
+- Variables 6+P–end: BF tape (T cells)
 - Comparison-chain dispatch for array access (MnM has no arrays either)
 
-**Step 2: MnM → ArnoldC** (`generate_mnm_interpreter.py`)
+**Step 2: MnM → ArnoldC** (`generate_mnm_interpreter.py --static_fields`)
 
-The 594-instruction MnM program is compiled into ArnoldC:
-- Instructions hardcoded in `fetchOpcode`/`fetchOperand` methods (594 if/else entries each)
-- MnM's value stack simulated with 10 individual ArnoldC variables (`s0`–`s9`)
-- MnM's 22 variables simulated with `v0`–`v21`
-- Stack/variable access via `stackRead`/`condWrite` methods
-- Each MnM opcode (PUSH, LOAD, STORE, EQ, JZ, INC, etc.) dispatched via sequential equality checks
+The MnM program is compiled into ArnoldC with the `static_fields=True` mode:
+- All main-scope variables become JVM **static fields** (not local variables), allowing methods to access them directly via `GETSTATIC`/`PUTSTATIC`
+- Each opcode handler is extracted into a **separate ArnoldC method**, keeping the main loop under the JVM 64KB method body limit
+- Large fetch methods (>2000 entries) are **split into chunks** with binary dispatch
+- Instructions hardcoded in `fetchOpcode`/`fetchOperand` methods
+- MnM's value stack simulated with individual ArnoldC variables (`s0`–`s9`)
 
-**Step 3: ArnoldC → JVM** (`ArnoldC.jar`)
+**Step 3: ArnoldC → JVM** (`ArnoldC-patched.jar`)
 
-The 12,411-line ArnoldC file compiles to JVM bytecode. When executed, the main loop iterates through MnM instructions, which in turn iterate through BF instructions, producing `6`.
+The patched compiler stores main-scope variables as static fields and uses `COMPUTE_FRAMES` for automatic stack map computation. The original compiler would crash on any program with >100 variables.
 
 ### The "no arrays" constraint
 
@@ -109,61 +123,88 @@ The entire architecture is shaped by one fundamental limitation: **none of the t
 | MnM Lang | Comparison chains: `if idx==0 load var0; if idx==1 load var1; ...` |
 | ArnoldC | Same comparison chains, plus `condWrite(target, cell, old, new)` for writes |
 
-At each interpreter level, "array access" becomes an if/else chain over individual variables. The triple chain stacks three levels of this simulation — the ArnoldC program contains if/else chains that dispatch MnM opcodes, which themselves contain if/else chains encoded as MnM instructions that dispatch BF opcodes and access the BF tape.
-
-### Why generators instead of generic interpreters
-
-A natural question: why not write one generic ArnoldC program that interprets any MnM program?
-
-The answer is the no-arrays constraint. A generic interpreter would need:
-1. **Dynamic program storage** — but ArnoldC can't store a variable-length instruction list
-2. **Dynamic stack sizing** — but `stackRead(idx, s0, s1, ..., sN)` must have a fixed parameter count at compile time
-3. **Dynamic string tables** — but `TALK TO THE HAND "..."` requires literal strings at compile time
-
-A "bigger fixed-size" interpreter is theoretically possible (pre-allocate 200 instruction slots, 50 stack cells, etc.) but hits ArnoldC's **100-local-variable limit** — a hard constraint in ArnoldC's bytecode generator where more than 100 local variables per method causes compilation failure. The existing MnM BF interpreter from the [mnmlang repo](https://github.com/acherm/mnmlang) uses 150 variables and indeed cannot be compiled through ArnoldC.
-
-The generator approach works around this by producing **tailored, compact programs** with exactly the resources needed. The BF program `+++[>++<-]>.` only needs 22 MnM variables and 10 ArnoldC stack cells — well within the 100-local budget.
+At each interpreter level, "array access" becomes an if/else chain over individual variables. The triple chain stacks three levels of this simulation.
 
 ### Size explosion across levels
 
-| Level | Representation | Size |
-|-------|---------------|------|
-| Brainfuck | `+++[>++<-]>.` | 12 characters |
-| MnM Lang | Comparison-chain interpreter | 594 lines |
-| ArnoldC | Stack-machine interpreter | 12,411 lines |
-| JVM bytecode | Compiled class file | ~74 KB |
+| | Simple BF (`+++[>++<-]>.`) | Hello World BF |
+|---|---|---|
+| Brainfuck | 12 characters | 114 characters |
+| MnM Lang | 594 lines, 22 vars | 2,883 lines, 127 vars |
+| ArnoldC | 12,593 lines | 55,747 lines |
+| Runtime | 0.1 seconds | 6.8 seconds |
+| Output | `6` | `72 101 108 108 111 32 87 111 114 108 100` |
 
 Each level of interpretation adds roughly an order of magnitude in code size, driven by the if/else chains needed to simulate array indexing.
 
+### Known limits
+
+| Limit | Source | Constraint |
+|-------|--------|-----------|
+| **P + T ≤ 247** | JVM 254-parameter limit on `varRead` | BF program size + tape cells |
+| **~4000 MnM instr per fetch chunk** | JVM 64KB method body | Handled by auto-splitting at 2000 entries |
+| **O(P²) runtime per BF step** | Triple interpretation overhead | Hello World: 6.8s |
+| **32-bit cell semantics** | ArnoldC uses signed `int`, not 8-bit | BF programs relying on byte wrapping produce different values |
+
+### Compiler requirements
+
+The demo artifacts require the **patched ArnoldC compiler** (`ArnoldC-patched.jar`) which includes two fixes over the original:
+1. `ClassWriter(COMPUTE_FRAMES)` — removes the 100-variable limit
+2. Static fields for main-scope variables — removes the 64KB method body limit by enabling handler method splitting
+
 ## Regenerating the artifacts
 
-All files in this folder can be regenerated from scratch:
-
 ```bash
-# Step 1: Generate MnM BF interpreter for the BF program
+# Hello World BF → MnM → ArnoldC (static_fields)
+python3 ../generate_mnm_bf.py '++++++++++[>+++++++>++++++++++>+++>+<<<<-]>++.>+.+++++++..+++.>++.<<+++++++++++++++.>.+++.------.--------.>>+.>++.'
+cp ../mnm_examples/bf_gen.mnm bf_helloworld_interpreter.mnm
+cp ../mnm_examples/bf_gen.mnm.json bf_helloworld_interpreter.mnm.json
+python3 -c "
+from generate_mnm_interpreter import generate; import json, sys; sys.path.insert(0,'..')
+with open('bf_helloworld_interpreter.mnm') as f: src=f.read()
+with open('bf_helloworld_interpreter.mnm.json') as f: sc=json.load(f)
+generate(src, sc, output_path='mnm_bf_helloworld.arnoldc', static_fields=True)
+"
+
+# Simple BF → MnM → ArnoldC
 python3 ../generate_mnm_bf.py '+++[>++<-]>.'
+cp ../mnm_examples/bf_gen.mnm bf_interpreter.mnm
+cp ../mnm_examples/bf_gen.mnm.json bf_interpreter.mnm.json
+python3 -c "
+from generate_mnm_interpreter import generate; import json, sys; sys.path.insert(0,'..')
+with open('bf_interpreter.mnm') as f: src=f.read()
+with open('bf_interpreter.mnm.json') as f: sc=json.load(f)
+generate(src, sc, output_path='mnm_bf_interpreter.arnoldc', static_fields=True)
+"
 
-# Step 2: Generate ArnoldC from MnM
-python3 ../generate_mnm_interpreter.py bf_interpreter.mnm bf_interpreter.mnm.json mnm_bf_interpreter.arnoldc
-
-# Step 3: Generate standalone MnM → ArnoldC examples
-python3 ../generate_mnm_interpreter.py hello_world.mnm hello_world.mnm.json mnm_hello_world.arnoldc
-python3 ../generate_mnm_interpreter.py factorial.mnm factorial.mnm.json mnm_factorial.arnoldc
-python3 ../generate_mnm_interpreter.py fizzbuzz.mnm fizzbuzz.mnm.json mnm_fizzbuzz.arnoldc
-
-# Or do the full chain in one shot:
-python3 ../generate_mnm_bf.py '+++[>++<-]>.' --run
+# Standalone MnM → ArnoldC examples
+for prog in hello_world factorial fizzbuzz; do
+    python3 -c "
+from generate_mnm_interpreter import generate; import json, sys; sys.path.insert(0,'..')
+with open('${prog}.mnm') as f: src=f.read()
+with open('${prog}.mnm.json') as f: sc=json.load(f)
+generate(src, sc, output_path='mnm_${prog}.arnoldc', static_fields=True)
+"
+done
 ```
 
 ## Try your own BF program
 
 ```bash
-# Any BF program that fits within ArnoldC's 100-variable budget
-# (roughly: fewer than 50 BF instructions, fewer than 20 tape cells)
-
+# With the patched compiler, programs up to ~200 BF instructions work:
 python3 ../generate_mnm_bf.py '+++++[>++++++<-]>.' --run
 # Output: 30  (computes 5×6)
 
 python3 ../generate_mnm_bf.py '+++++.>+++.' --run
 # Output: 5 3  (two separate values)
+
+# For the full chain with static_fields (larger programs):
+python3 ../generate_mnm_bf.py 'YOUR_BF_PROGRAM_HERE'
+python3 -c "
+from generate_mnm_interpreter import generate; import json
+with open('../mnm_examples/bf_gen.mnm') as f: src=f.read()
+with open('../mnm_examples/bf_gen.mnm.json') as f: sc=json.load(f)
+generate(src, sc, output_path='my_program.arnoldc', static_fields=True)
+"
+java -jar ../ArnoldC-patched.jar my_program.arnoldc && java my_program
 ```

@@ -53,15 +53,14 @@ ArnoldC is an imperative programming language that compiles to JVM bytecode. Its
 │   ├── hello_world.mnm / .mnm.json
 │   ├── factorial.mnm / .mnm.json
 │   └── fizzbuzz.mnm / .mnm.json
-├── ArnoldC-patched.jar                              # Patched compiler (100-var limit removed)
+├── ArnoldC-patched.jar                              # Patched compiler (variable + method limits removed)
 ├── demo/                                            # Pre-built artifacts for all interpreter chains
-│   ├── README.md                                    # Detailed walkthrough
-│   ├── bf_program.txt                               # Input BF program: +++[>++<-]>.
-│   ├── bf_interpreter.mnm / .mnm.json               # MnM BF interpreter (594 lines)
-│   ├── mnm_bf_interpreter.arnoldc                   # ArnoldC interpreting MnM interpreting BF (12,411 lines)
-│   ├── mnm_hello_world.arnoldc                      # ArnoldC interpreting MnM hello world
-│   ├── mnm_factorial.arnoldc                        # ArnoldC interpreting MnM factorial
-│   └── mnm_fizzbuzz.arnoldc                         # ArnoldC interpreting MnM fizzbuzz
+│   ├── README.md                                    # Detailed walkthrough and limits analysis
+│   ├── bf_helloworld.txt + bf_helloworld_interpreter.mnm  # BF Hello World triple chain (114 instr)
+│   ├── mnm_bf_helloworld.arnoldc                    # ArnoldC for BF Hello World (55,747 lines)
+│   ├── bf_program.txt + bf_interpreter.mnm          # Simple BF triple chain (12 instr)
+│   ├── mnm_bf_interpreter.arnoldc                   # ArnoldC for simple BF (12,593 lines)
+│   └── mnm_{hello_world,factorial,fizzbuzz}.arnoldc  # Standalone MnM→ArnoldC examples
 └── README.md
 ```
 
@@ -307,24 +306,30 @@ python3 test_mnm.py
 The ultimate test: **three esoteric languages interpreting each other**. A Brainfuck program runs inside a MnM interpreter, which runs inside an ArnoldC interpreter, which compiles to JVM bytecode.
 
 ```
-Brainfuck          MnM Lang           ArnoldC             JVM
-+++[>++<-]>.  ──▶  594 instructions  ──▶  12,411 lines  ──▶  output: 6
- (12 instr)        (22 variables)        (Arnie quotes)
+Brainfuck            MnM Lang              ArnoldC                JVM
+Hello World    ──▶   2,883 instructions  ──▶  55,747 lines   ──▶  "Hello World"
+(114 instr)          (127 variables)          (Arnie quotes)      (6.8 seconds)
 ```
 
 ```bash
-# Try it yourself:
+# BF Hello World (requires patched compiler for 127 variables + static_fields):
+cd demo
+java -jar ../ArnoldC-patched.jar mnm_bf_helloworld.arnoldc
+java mnm_bf_helloworld
+# Output: 72 101 108 108 111 32 87 111 114 108 100 = "Hello World"
+
+# Simple example (works with original compiler too):
 python3 generate_mnm_bf.py '+++[>++<-]>.' --run
 # Output: 6  (computes 3×2)
-
-# Or compile and run the pre-built artifact:
-cd demo
-java -jar ../ArnoldC.jar mnm_bf_interpreter.arnoldc
-java mnm_bf_interpreter
-# Output: 6
 ```
 
-Each level of interpretation adds roughly an order of magnitude in code size, driven by if/else chains simulating array access — because none of the three languages have arrays. See [`demo/README.md`](demo/README.md) for a detailed walkthrough of the architecture, size explosion, and design constraints.
+| BF program | BF instr | MnM vars | ArnoldC lines | Runtime | Output |
+|-----------|------:|-----:|------:|------:|--------|
+| `+++[>++<-]>.` | 12 | 22 | 12,593 | 0.1s | `6` |
+| `+++++[>++++++<-]>.` | 18 | 28 | — | 0.1s | `30` |
+| Hello World | 114 | 127 | 55,747 | 6.8s | `Hello World` |
+
+Each level of interpretation adds roughly an order of magnitude in code size, driven by if/else chains simulating array access — because none of the three languages have arrays. See [`demo/README.md`](demo/README.md) for a detailed walkthrough of the architecture, size explosion, limits, and design constraints.
 
 ## BF Test Suite
 
