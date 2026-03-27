@@ -361,66 +361,68 @@ python3 mnm_to_stdin.py mnm_examples/factorial.mnm mnm_examples/factorial.mnm.js
 
 The ultimate test: **three esoteric languages interpreting each other**. A Brainfuck program runs inside a MnM interpreter, which runs inside an ArnoldC interpreter, which compiles to JVM bytecode.
 
-```
-Brainfuck            MnM Lang              ArnoldC                JVM
-Hello World    ──▶   2,883 instructions  ──▶  55,747 lines   ──▶  "Hello World"
-(114 instr)          (127 variables)          (Arnie quotes)      (6.8 seconds)
-```
+There are two approaches to the triple chain — a **compiler** approach (Path 2, fast, Python at build time) and a **true interpreter** approach (Path 4, pure ArnoldC at runtime):
+
+### Path 2: Compiler triple chain
+
+The MnM BF interpreter is compiled into a tailored ArnoldC program by `generate_mnm_interpreter.py`. The ArnoldC varies per input. Python is needed at build time.
 
 ```bash
-# BF Hello World (requires patched compiler for 127 variables + static_fields):
-cd demo
-java -jar ../ArnoldC-patched.jar mnm_bf_helloworld.arnoldc
+cd demos/triplechain
+java -jar ../../ArnoldC-patched.jar mnm_bf_helloworld.arnoldc
 java mnm_bf_helloworld
-# Output: 72 101 108 108 111 32 87 111 114 108 100 = "Hello World"
-
-# Simple example (works with original compiler too):
-python3 generate_mnm_bf.py '+++[>++<-]>.' --run
-# Output: 6  (computes 3×2)
+# Output: 72 101 108 108 111 32 87 111 114 108 100 = "Hello World" (6.8s)
 ```
 
-| BF program | BF instr | MnM vars | ArnoldC lines | Runtime | Output |
-|-----------|------:|-----:|------:|------:|--------|
-| `+++[>++<-]>.` | 12 | 22 | 12,593 | 0.1s | `6` |
-| `+++++[>++++++<-]>.` | 18 | 28 | — | 0.1s | `30` |
-| Hello World | 114 | 127 | 55,747 | 6.8s | `Hello World` |
+### Path 4: True interpreter triple chain
 
-Each level of interpretation adds roughly an order of magnitude in code size, driven by if/else chains simulating array access — because none of the three languages have arrays. See [`demos/triplechain/`](demos/triplechain/) for a detailed walkthrough of the architecture, both approaches (compiler vs true interpreter), size explosion, and limits analysis.
+A single fixed ArnoldC program (`mnm_vm`) reads the MnM BF interpreter from stdin and executes it. **No Python at runtime** — the same ArnoldC file runs any MnM program, including one that interprets Brainfuck.
+
+```bash
+# Build the VM once (sized for the target MnM program):
+python3 build_mnm_vm.py mnm_vm_hw.arnoldc --prog 3100 --vars 140 --stack 30
+java -jar ArnoldC-patched.jar mnm_vm_hw.arnoldc
+
+# At runtime — pure ArnoldC, no Python:
+python3 mnm_to_stdin.py mnm_examples/hw_bf.mnm mnm_examples/hw_bf.mnm.json > input.txt
+cat input.txt | java mnm_vm_hw
+# Output: 72 101 108 108 111 32 87 111 114 108 100 = "Hello World" (7.2s)
+```
+
+### Results
+
+| BF program | BF instr | MnM instr | MnM vars | Path 2 (compiler) | Path 4 (true interp.) |
+|-----------|------:|------:|-----:|------:|------:|
+| `+++[>++<-]>.` | 12 | 594 | 22 | 0.1s, 12,593 lines | 0.1s, 26,757 lines |
+| Hello World | 114 | 3,030 | 130 | 6.8s, 55,747 lines | **7.2s**, 130,055 lines |
+| Sierpinski (2 rows) | 124 | 9,610 | 270 | — | **~10 min**, 410,319 lines |
+| Sierpinski (32 rows) | 124 | 9,610 | 270 | — | ~2.5 hours (estimated) |
+
+Each level of interpretation adds roughly an order of magnitude in code size, driven by if/else chains simulating array access — because none of the three languages have arrays. See [`demos/triplechain/`](demos/triplechain/) for a detailed walkthrough.
 
 ## Coming Full Circle: Direct BF Interpreter (`bf_vm.arnoldc`)
 
 After building the MnM interpreter, the MnM→ArnoldC compiler, the triple chain, patching the ArnoldC compiler three times, and running Sierpinski through 410,000 lines of triple interpretation — we realized we could just build a **direct** BF interpreter in ArnoldC. No MnM in the middle.
 
-[`bf_vm.arnoldc`](bf_vm.arnoldc) (7,281 lines) reads any Brainfuck program from stdin and executes it. No Python at runtime, no intermediate languages. Just pipe BF opcodes as integers and get output:
+[`bf_vm.arnoldc`](bf_vm.arnoldc) (7,281 lines) reads any Brainfuck program from stdin and executes it. No Python at runtime, no intermediate languages:
 
 ```bash
-# Compile once:
-java -jar ArnoldC-patched.jar bf_vm.arnoldc
-
-# Run any BF program (encoding: >=1 <=2 +=3 -=4 .=5 ,=6 [=7 ]=8):
-echo "12 3 3 3 7 1 3 3 2 4 8 1 5" | java bf_vm
-# Output: 6  (+++[>++<-]>.)
-
-# Sierpinski triangle — complete 32-row output:
-python3 -c "
-bf='$(cat /dev/null)' # use the encoder below
-enc={'>':1,'<':2,'+':3,'-':4,'.':5,',':6,'[':7,']':8}
-codes=[enc[c] for c in open('/tmp/sierpinski.b').read() if c in enc]
-print(len(codes),' '.join(str(c) for c in codes))
-" | java bf_vm_big
+java -jar ArnoldC-patched.jar bf_vm.arnoldc    # compile once
+echo "12 3 3 3 7 1 3 3 2 4 8 1 5" | java bf_vm  # +++[>++<-]>. → 6
 ```
 
 This is the **third path** to "ArnoldC runs Brainfuck," and honestly the least interesting:
 
-| Path | Architecture | Complexity | What makes it interesting |
-|------|-------------|-----------|--------------------------|
-| **1. `brainfuck.arnoldc`** | Hardcoded BF program | ~488 lines | First interpreter, discovered the 100-var limit |
-| **2. Triple chain** | ArnoldC → MnM → BF | 410,319 lines | Three languages interpreting each other; required patching the compiler |
-| **3. `bf_vm.arnoldc`** | Direct stdin BF interpreter | 7,281 lines | Clean and fast, but skips the journey |
+| Path | Architecture | ArnoldC | Sierpinski time | What makes it interesting |
+|------|-------------|------:|------:|--------------------------|
+| **1. `brainfuck.arnoldc`** | Hardcoded BF program | 488 | — | First interpreter, discovered the 100-var limit |
+| **2. Compiler triple chain** | ArnoldC → MnM → BF (compiled) | 55,747 | 6.8s (Hello World) | Python-generated, tailored per input |
+| **3. `bf_vm.arnoldc`** | Direct stdin BF interpreter | 7,281 | **0.2s** | Clean and fast, but skips the journey |
+| **4. True triple chain** | ArnoldC → MnM → BF (stdin) | 410,319 | **~2.5 hours** | Pure ArnoldC at runtime, three interpreters deep |
 
-Path 3 is the pragmatic answer. But Paths 1 and 2 are where everything was discovered — the 100-variable limit, the 64KB method limit, static fields, shared Scanner, zero-init optimization, chunk splitting. Without the MnM detour, we'd never have needed to patch the compiler, and `bf_vm.arnoldc` at this scale wouldn't have been possible.
+Path 3 is the pragmatic answer. Path 4 is the purest — a single fixed ArnoldC program interpreting a MnM program interpreting Brainfuck, with no Python at runtime. But Paths 1 and 2 are where everything was discovered — the 100-variable limit, the 64KB method limit, static fields, shared Scanner, zero-init optimization, chunk splitting. Without the MnM detour, we'd never have needed to patch the compiler, and none of the later paths would have been possible.
 
-The Sierpinski triangle takes **seconds** through `bf_vm` vs **30 minutes** through the triple chain — but the triple chain is the one that pushed every boundary.
+The Sierpinski triangle takes **0.2 seconds** through Path 3 vs **~2.5 hours** through Path 4 — a 45,000× slowdown for the privilege of three nested interpreters. That's the cost of simulating arrays via if/else chains, three levels deep.
 
 ## BF Test Suite
 
@@ -749,7 +751,8 @@ All programs were generated by **Claude (Anthropic)**:
 7. **Compiler patches:** Traced the 100-variable limit to a hardcoded `visitMaxs(100, 100)` — one-line fix. Then hit the JVM 64KB method body limit at 150 variables. Solved by a deeper compiler change: main-scope variables stored as static fields (`PUTSTATIC`/`GETSTATIC`) so handler methods can access them directly, enabling method splitting. Both bugs were never reported — first known diagnosis and fix
 8. **True MnM interpreter:** Recognized that the compiler approach (`generate_mnm_interpreter.py`) was architecturally different from the BF interpreter — it generated different ArnoldC per input, not a fixed program. Built `mnm_vm.arnoldc`: a single 7,319-line ArnoldC program that reads any MnM program from stdin and executes it. Uses static fields for all state (320+ pre-allocated slots), void write methods, and GETSTATIC-based reads — eliminating every limit that previously forced the compiler approach. Verified with 16 automated tests
 9. **Sierpinski triangle:** Ran the Sierpinski BF program through the triple chain (ArnoldC→MnM→BF). Required three more compiler fixes: shared Scanner (no staggered stdin delivery), zero-init skip (main method under 64KB), nested if/else dispatch (correct chunk routing). First 6 rows rendered in 30 minutes through 410,319 lines of ArnoldC
-10. **Coming full circle:** Realized the MnM layer was unnecessary for BF interpretation. Built `bf_vm.arnoldc` — a direct ArnoldC→BF interpreter (7,281 lines) that reads any BF from stdin. The complete Sierpinski triangle renders in seconds. The least interesting path architecturally, but it only exists because the MnM detour forced all the compiler patches that made it possible
+10. **True triple chain (Path 4):** Combined `mnm_vm` with a MnM BF interpreter: a single fixed ArnoldC program reads MnM from stdin, which itself interprets Brainfuck. Hello World in 7.2 seconds through 130K lines. Sierpinski renders (slowly — ~10 min for 2 rows) through 410K lines. No Python at runtime — the purest form of three nested interpreters
+11. **Coming full circle (Path 3):** Realized the MnM layer was unnecessary for BF interpretation. Built `bf_vm.arnoldc` — a direct ArnoldC→BF interpreter (7,281 lines). Sierpinski in 0.2 seconds. The least interesting path, but it only exists because the MnM detour forced all the compiler patches
 
 ## License
 
