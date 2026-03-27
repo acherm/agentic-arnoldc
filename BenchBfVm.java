@@ -17,8 +17,8 @@ public class BenchBfVm {
     }
 
     public static void main(String[] args) throws Exception {
-        int warmup = 5;
-        int runs = 20;
+        int warmup = Integer.getInteger("warmup", 5);
+        int runs = Integer.getInteger("runs", 20);
         String inputFile = args.length > 0 ? args[0] : null;
 
         if (inputFile == null) {

@@ -47,6 +47,7 @@ ArnoldC is an imperative programming language that compiles to JVM bytecode. Its
 ├── bf_vm.arnoldc                                    # BF interpreter (reads any BF from stdin)
 ├── build_bf_vm.py                                   # Generates bf_vm.arnoldc (run once)
 ├── BenchBfVm.java                                   # JIT benchmark harness for bf_vm
+├── bench_diverse.py                                 # Diverse benchmark: bf_vm vs native C
 ├── generate_bf_interpreter.py                       # Python generator for BF interpreter
 ├── test_bf.py                                       # Automated test suite (38 BF tests)
 ├── mnm_vm.arnoldc                                   # True MnM interpreter (fixed, reads from stdin)
@@ -427,19 +428,28 @@ The Sierpinski triangle takes **0.2 seconds** through Path 3 vs **~2.5 hours** t
 
 ### Benchmark: `bf_vm` vs Native C Interpreter
 
-We benchmarked `bf_vm.arnoldc` running the Sierpinski triangle (114 BF instructions) against the reference [`brainfuck`](https://github.com/fabianishere/brainfuck) interpreter (compiled C). Outputs were verified identical.
+We benchmarked `bf_vm.arnoldc` against the reference [`brainfuck`](https://github.com/fabianishere/brainfuck) interpreter (compiled C) across 10 BF programs of varying complexity. All outputs were verified identical.
 
-| Interpreter | Sierpinski time | vs native C |
-|---|---|---|
-| `brainfuck` (native C) | **2.9 ms** | 1× |
-| `bf_vm.arnoldc` (cold JVM) | **200 ms** | ~68× slower |
-| `bf_vm.arnoldc` (warm JVM, JIT'd) | **0.2 ms** | **~15× faster** |
+| Program | Ops | Native C | Cold JVM | Warm JIT | Cold/Ref | Ref/Warm |
+|---|---:|---:|---:|---:|---:|---:|
+| trivial_print (no loops) | 102 | 2.3 ms | 74 ms | 0.23 ms | 32× | **10×** |
+| multiply 3×2 | 12 | 2.3 ms | 70 ms | 0.18 ms | 31× | **13×** |
+| countdown 5→1 | 9 | 2.5 ms | 74 ms | 0.16 ms | 29× | **16×** |
+| nested multiply 2×3×4 | 22 | 2.8 ms | 79 ms | 0.17 ms | 28× | **16×** |
+| Hello World | 106 | 2.5 ms | 90 ms | 0.19 ms | 36× | **13×** |
+| alphabet A–Z | 116 | 2.6 ms | 76 ms | 0.20 ms | 29× | **13×** |
+| copy cell | 37 | 2.6 ms | 79 ms | 0.22 ms | 30× | **12×** |
+| **Sierpinski triangle** | 114 | 2.9 ms | 206 ms | 0.22 ms | 71× | **13×** |
+| squares 0,1,4,9,… | 165 | 2.7 ms | 95 ms | 0.23 ms | 35× | **12×** |
+| bubble sort cells | 165 | 2.3 ms | 99 ms | 0.24 ms | 43× | **10×** |
 
-The 200 ms cold start is ~99.8% JVM startup overhead. Once HotSpot's JIT compiler warms up (~5 iterations), `bf_vm` runs Sierpinski in **0.17 ms** — over an order of magnitude faster than the native C interpreter. The JIT inlines the dispatch loop, eliminates dead branches in the 7,281-line if/else chain, and compiles the whole thing into tight native code.
+**Cold JVM** = separate `java bf_vm` process each time (~70–200 ms, dominated by JVM startup). **Warm JIT** = single JVM, 10 warmup iterations, 30 measured runs via [`BenchBfVm.java`](BenchBfVm.java).
+
+Once HotSpot's JIT compiler warms up, `bf_vm` consistently runs **10–16× faster than the native C interpreter** across all programs. The JIT inlines the dispatch loop, eliminates dead branches in the 7,281-line if/else chain, and compiles the whole thing into tight native code.
 
 A joke language beating a C interpreter is a pretty good punchline.
 
-Reproducible via [`BenchBfVm.java`](BenchBfVm.java), which runs `bf_vm.main()` via reflection inside a single JVM, resetting the static Scanner between iterations to isolate pure execution time.
+Reproducible via [`bench_diverse.py`](bench_diverse.py) (end-to-end) or [`BenchBfVm.java`](BenchBfVm.java) (JIT harness only).
 
 ## BF Test Suite
 
