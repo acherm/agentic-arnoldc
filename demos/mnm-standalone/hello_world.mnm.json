@@ -1,0 +1,10 @@
+{
+  "strings": [
+    "Hello, world!"
+  ],
+  "variables": [],
+  "inputs": {
+    "int": [],
+    "str": []
+  }
+}

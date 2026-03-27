@@ -58,13 +58,10 @@ ArnoldC is an imperative programming language that compiles to JVM bytecode. Its
 │   ├── factorial.mnm / .mnm.json
 │   └── fizzbuzz.mnm / .mnm.json
 ├── ArnoldC-patched.jar                              # Patched compiler (variable + method limits removed)
-├── demo/                                            # Pre-built artifacts for all interpreter chains
-│   ├── README.md                                    # Detailed walkthrough and limits analysis
-│   ├── bf_helloworld.txt + bf_helloworld_interpreter.mnm  # BF Hello World triple chain (114 instr)
-│   ├── mnm_bf_helloworld.arnoldc                    # ArnoldC for BF Hello World (55,747 lines)
-│   ├── bf_program.txt + bf_interpreter.mnm          # Simple BF triple chain (12 instr)
-│   ├── mnm_bf_interpreter.arnoldc                   # ArnoldC for simple BF (12,593 lines)
-│   └── mnm_{hello_world,factorial,fizzbuzz}.arnoldc  # Standalone MnM→ArnoldC examples
+├── demos/                                           # Pre-built artifacts for all interpreter chains
+│   ├── triplechain/                                 # ArnoldC → MnM → BF (compiler + true interpreter)
+│   ├── mnm-standalone/                              # MnM programs with true interpreter
+│   └── mnm-compiler/                                # MnM programs compiled to ArnoldC
 └── README.md
 ```
 
@@ -386,7 +383,7 @@ python3 generate_mnm_bf.py '+++[>++<-]>.' --run
 | `+++++[>++++++<-]>.` | 18 | 28 | — | 0.1s | `30` |
 | Hello World | 114 | 127 | 55,747 | 6.8s | `Hello World` |
 
-Each level of interpretation adds roughly an order of magnitude in code size, driven by if/else chains simulating array access — because none of the three languages have arrays. See [`demo/README.md`](demo/README.md) for a detailed walkthrough of the architecture, size explosion, limits, and design constraints.
+Each level of interpretation adds roughly an order of magnitude in code size, driven by if/else chains simulating array access — because none of the three languages have arrays. See [`demos/triplechain/`](demos/triplechain/) for a detailed walkthrough of the architecture, both approaches (compiler vs true interpreter), size explosion, and limits analysis.
 
 ## BF Test Suite
 
