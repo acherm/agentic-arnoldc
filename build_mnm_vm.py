@@ -673,8 +673,10 @@ def build():
     # D.  METHODS (all access static fields via GETSTATIC/PUTSTATIC)
     # ═════════════════════════════════════════════════════════════════════
 
-    def emit_read_method(name, prefix, size):
-        """Non-void method: name(idx) → prefix[idx]."""
+    CHUNK = 2000  # max entries per method (~50KB bytecode, under 64KB)
+
+    def emit_read_chunk(name, prefix, start, end):
+        """Non-void sub-method for a range of entries."""
         emit(f"LISTEN TO ME VERY CAREFULLY {name}")
         emit("I NEED YOUR CLOTHES YOUR BOOTS AND YOUR MOTORCYCLE idx")
         emit("GIVE THESE PEOPLE AIR")
@@ -682,7 +684,7 @@ def build():
         emit("YOU SET US UP 0")
         emit("HEY CHRISTMAS TREE eq")
         emit("YOU SET US UP 0")
-        for i in range(size):
+        for i in range(start, end):
             emit("GET TO THE CHOPPER eq")
             emit("HERE IS MY INVITATION idx")
             emit(f"YOU ARE NOT YOU YOU ARE ME {i}")
@@ -696,14 +698,14 @@ def build():
         emit("HASTA LA VISTA, BABY")
         emit()
 
-    def emit_write_method(name, prefix, size):
-        """Void method: name(idx, val) — writes val to prefix[idx]."""
+    def emit_write_chunk(name, prefix, start, end):
+        """Void sub-method for a range of entries."""
         emit(f"LISTEN TO ME VERY CAREFULLY {name}")
         emit("I NEED YOUR CLOTHES YOUR BOOTS AND YOUR MOTORCYCLE idx")
         emit("I NEED YOUR CLOTHES YOUR BOOTS AND YOUR MOTORCYCLE val")
         emit("HEY CHRISTMAS TREE eq")
         emit("YOU SET US UP 0")
-        for i in range(size):
+        for i in range(start, end):
             emit("GET TO THE CHOPPER eq")
             emit("HERE IS MY INVITATION idx")
             emit(f"YOU ARE NOT YOU YOU ARE ME {i}")
@@ -715,6 +717,77 @@ def build():
             emit_end_if()
         emit("HASTA LA VISTA, BABY")
         emit()
+
+    def emit_read_method(name, prefix, size):
+        """Non-void method with auto-splitting for large sizes."""
+        if size <= CHUNK:
+            emit_read_chunk(name, prefix, 0, size)
+        else:
+            chunks = [(s, min(s + CHUNK, size)) for s in range(0, size, CHUNK)]
+            # Dispatcher
+            emit(f"LISTEN TO ME VERY CAREFULLY {name}")
+            emit("I NEED YOUR CLOTHES YOUR BOOTS AND YOUR MOTORCYCLE idx")
+            emit("GIVE THESE PEOPLE AIR")
+            emit("HEY CHRISTMAS TREE res")
+            emit("YOU SET US UP 0")
+            emit("HEY CHRISTMAS TREE gt")
+            emit("YOU SET US UP 0")
+            # Nested if/else cascade: exclusive dispatch
+            for ci in range(len(chunks) - 1, 0, -1):
+                start, _ = chunks[ci]
+                cn = f"{name}C{ci}"
+                emit("GET TO THE CHOPPER gt")
+                emit("HERE IS MY INVITATION idx")
+                emit(f"LET OFF SOME STEAM BENNET {start - 1}")
+                emit("ENOUGH TALK")
+                emit("BECAUSE I'M GOING TO SAY PLEASE gt")
+                emit("GET YOUR ASS TO MARS res")
+                emit(f"DO IT NOW {cn} idx")
+                emit("BULLSHIT")
+            # Default: chunk 0
+            emit("GET YOUR ASS TO MARS res")
+            emit(f"DO IT NOW {name}C0 idx")
+            for _ in range(len(chunks) - 1):
+                emit_end_if()
+            emit("I'LL BE BACK res")
+            emit("HASTA LA VISTA, BABY")
+            emit()
+            # Sub-methods
+            for ci, (start, end) in enumerate(chunks):
+                emit_read_chunk(f"{name}C{ci}", prefix, start, end)
+
+    def emit_write_method(name, prefix, size):
+        """Void method with auto-splitting for large sizes."""
+        if size <= CHUNK:
+            emit_write_chunk(name, prefix, 0, size)
+        else:
+            chunks = [(s, min(s + CHUNK, size)) for s in range(0, size, CHUNK)]
+            # Dispatcher (void)
+            emit(f"LISTEN TO ME VERY CAREFULLY {name}")
+            emit("I NEED YOUR CLOTHES YOUR BOOTS AND YOUR MOTORCYCLE idx")
+            emit("I NEED YOUR CLOTHES YOUR BOOTS AND YOUR MOTORCYCLE val")
+            emit("HEY CHRISTMAS TREE gt")
+            emit("YOU SET US UP 0")
+            # Nested if/else cascade: exclusive dispatch
+            for ci in range(len(chunks) - 1, 0, -1):
+                start, _ = chunks[ci]
+                cn = f"{name}C{ci}"
+                emit("GET TO THE CHOPPER gt")
+                emit("HERE IS MY INVITATION idx")
+                emit(f"LET OFF SOME STEAM BENNET {start - 1}")
+                emit("ENOUGH TALK")
+                emit("BECAUSE I'M GOING TO SAY PLEASE gt")
+                emit(f"DO IT NOW {cn} idx val")
+                emit("BULLSHIT")
+            # Default: chunk 0
+            emit(f"DO IT NOW {name}C0 idx val")
+            for _ in range(len(chunks) - 1):
+                emit_end_if()
+            emit("HASTA LA VISTA, BABY")
+            emit()
+            # Sub-methods
+            for ci, (start, end) in enumerate(chunks):
+                emit_write_chunk(f"{name}C{ci}", prefix, start, end)
 
     # Program read
     emit_read_method("fetchOp", "po", PROG_SIZE)
