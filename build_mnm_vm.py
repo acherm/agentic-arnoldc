@@ -747,10 +747,26 @@ def build():
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    out_path = sys.argv[1] if len(sys.argv) > 1 else "mnm_vm.arnoldc"
+    import argparse
+    parser = argparse.ArgumentParser(description="Build a fixed MnM VM interpreter in ArnoldC")
+    parser.add_argument("output", nargs="?", default="mnm_vm.arnoldc")
+    parser.add_argument("--prog", type=int, default=PROG_SIZE, help=f"Max instructions (default {PROG_SIZE})")
+    parser.add_argument("--stack", type=int, default=STACK_SIZE, help=f"Max stack depth (default {STACK_SIZE})")
+    parser.add_argument("--vars", type=int, default=VAR_SIZE, help=f"Max variables (default {VAR_SIZE})")
+    parser.add_argument("--cs", type=int, default=CS_SIZE, help=f"Max call stack (default {CS_SIZE})")
+    parser.add_argument("--iq", type=int, default=IQ_SIZE, help=f"Max input queue (default {IQ_SIZE})")
+    args = parser.parse_args()
+
+    # Override globals
+    PROG_SIZE = args.prog
+    STACK_SIZE = args.stack
+    VAR_SIZE = args.vars
+    CS_SIZE = args.cs
+    IQ_SIZE = args.iq
+
     source = build()
-    with open(out_path, "w") as f:
+    with open(args.output, "w") as f:
         f.write(source)
     n_lines = source.count('\n')
-    print(f"Built {n_lines} lines → {out_path}")
+    print(f"Built {n_lines} lines → {args.output}")
     print(f"  PROG_SIZE={PROG_SIZE}, STACK_SIZE={STACK_SIZE}, VAR_SIZE={VAR_SIZE}, CS_SIZE={CS_SIZE}, IQ_SIZE={IQ_SIZE}")
