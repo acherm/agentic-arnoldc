@@ -46,6 +46,7 @@ ArnoldC is an imperative programming language that compiles to JVM bytecode. Its
 ├── brainfuck.arnoldc                                # BF interpreter (hardcoded program)
 ├── bf_vm.arnoldc                                    # BF interpreter (reads any BF from stdin)
 ├── build_bf_vm.py                                   # Generates bf_vm.arnoldc (run once)
+├── BenchBfVm.java                                   # JIT benchmark harness for bf_vm
 ├── generate_bf_interpreter.py                       # Python generator for BF interpreter
 ├── test_bf.py                                       # Automated test suite (38 BF tests)
 ├── mnm_vm.arnoldc                                   # True MnM interpreter (fixed, reads from stdin)
@@ -423,6 +424,22 @@ This is the **third path** to "ArnoldC runs Brainfuck," and honestly the least i
 Path 3 is the pragmatic answer. Path 4 is the purest — a single fixed ArnoldC program interpreting a MnM program interpreting Brainfuck, with no Python at runtime. But Paths 1 and 2 are where everything was discovered — the 100-variable limit, the 64KB method limit, static fields, shared Scanner, zero-init optimization, chunk splitting. Without the MnM detour, we'd never have needed to patch the compiler, and none of the later paths would have been possible.
 
 The Sierpinski triangle takes **0.2 seconds** through Path 3 vs **~2.5 hours** through Path 4 — a 45,000× slowdown for the privilege of three nested interpreters. That's the cost of simulating arrays via if/else chains, three levels deep.
+
+### Benchmark: `bf_vm` vs Native C Interpreter
+
+We benchmarked `bf_vm.arnoldc` running the Sierpinski triangle (114 BF instructions) against the reference [`brainfuck`](https://github.com/fabianishere/brainfuck) interpreter (compiled C). Outputs were verified identical.
+
+| Interpreter | Sierpinski time | vs native C |
+|---|---|---|
+| `brainfuck` (native C) | **2.9 ms** | 1× |
+| `bf_vm.arnoldc` (cold JVM) | **200 ms** | ~68× slower |
+| `bf_vm.arnoldc` (warm JVM, JIT'd) | **0.2 ms** | **~15× faster** |
+
+The 200 ms cold start is ~99.8% JVM startup overhead. Once HotSpot's JIT compiler warms up (~5 iterations), `bf_vm` runs Sierpinski in **0.17 ms** — over an order of magnitude faster than the native C interpreter. The JIT inlines the dispatch loop, eliminates dead branches in the 7,281-line if/else chain, and compiles the whole thing into tight native code.
+
+A joke language beating a C interpreter is a pretty good punchline.
+
+Reproducible via [`BenchBfVm.java`](BenchBfVm.java), which runs `bf_vm.main()` via reflection inside a single JVM, resetting the static Scanner between iterations to isolate pure execution time.
 
 ## BF Test Suite
 
