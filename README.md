@@ -424,20 +424,33 @@ This is the **third path** to "ArnoldC runs Brainfuck," and honestly the least i
 
 Path 3 is the pragmatic answer (0.2s Sierpinski). Path 4 is the purest (three interpreters, no Python, ~2.5 hours Sierpinski — a 45,000× slowdown for three nested if/else array simulations).
 
-### Why the MnM detour was essential
+### What the MnM detour actually contributed
 
-But `bf_vm.arnoldc` (Path 3) **could not have existed** without the MnM journey. The original `brainfuck.arnoldc` (Path 1, 488 lines) was built with the unpatched compiler under severe constraints. MnM's 37-opcode stack machine was harder than BF in every dimension, forcing discoveries and fixes that BF alone never triggered:
+An honest assessment: `bf_vm.arnoldc` (Path 3) is **slower** than the original `brainfuck.arnoldc` (Path 1) for the same BF program — 0.068s vs 0.051s. The static fields approach, larger dispatch tables, and stdin parsing all add overhead. The MnM journey didn't improve *performance*. It expanded *capability*:
 
-| Constraint | Original BF interpreter (Path 1) | After MnM journey (Path 3) | What unlocked it |
-|-----------|--------------------------------|---------------------------|-----------------|
-| **100-variable limit** | Tape + program must fit in ~100 vars; hardcode program as constants in `fetch()` to save slots | 200 program slots + 150 tape cells, no limit | `COMPUTE_FRAMES` compiler patch |
-| **Array access** | Pass ALL tape cells as method parameters (`tapeRead(idx, c0, ..., cN)`) — hits 254-param JVM limit | Methods use `GETSTATIC` directly — no parameters, no limit | Static fields compiler patch |
-| **64KB method body** | Everything inline in main; can't scale beyond ~50 tape cells | Opcode handlers in separate methods; auto-chunked fetch methods | Static fields + handler splitting |
-| **Stdin input** | Impossible — each `new Scanner(System.in)` consumes all buffered input; must hardcode the BF program | Instant piped input — read any BF program from stdin at runtime | Shared Scanner compiler patch |
-| **Zero-init overhead** | Not an issue at 100 vars | 20,000 field inits would exceed 64KB in main; skip zero-valued static fields | Zero-init optimization in `DeclareIntNode` |
-| **Tape sizing** | Static estimate (count `>` and `<`) — wrong for loops | Simulate actual BF execution to find real tape usage | Sierpinski debugging |
+| | Original `brainfuck.arnoldc` (Path 1) | `bf_vm.arnoldc` (Path 3) |
+|---|---|---|
+| **Programs** | One, hardcoded at build time | Any, read from stdin at runtime |
+| **Max tape cells** | ~50 (100-variable limit) | 150 (configurable, no hard limit) |
+| **Max BF instructions** | ~50 (100-variable limit) | 200 (configurable) |
+| **Sierpinski triangle** | Impossible (needs 131 tape cells) | 0.2 seconds, complete 32 rows |
+| **Compiler required** | Original (unpatched) | Patched (5 fixes from the MnM journey) |
+| **Performance** | **Faster** (0.051s for `+++[>++<-]>.`) | Slower (0.068s) |
 
-Without the MnM work: no `bf_vm.arnoldc`, no Sierpinski (needs 131 tape cells), no stdin-based programs, no scaling beyond ~50 tape cells. Each MnM challenge forced a compiler fix that fed back into making better BF interpreters.
+The original is the faster interpreter for programs that fit within its limits. It just can't run Sierpinski, can't read from stdin, and can't handle programs beyond ~50 instructions+cells.
+
+`bf_vm.arnoldc` **could not have existed** without the MnM journey. MnM's 37-opcode stack machine was harder than BF in every dimension (stack, variables, call stack, strings, input queues), forcing discoveries that BF alone never triggered:
+
+| Capability unlocked | Compiler fix required | Discovered while... |
+|--------------------|----------------------|-------------------|
+| >100 variables | `COMPUTE_FRAMES` (one-line fix) | MnM BF interpreter needed 150 vars |
+| Methods access main-scope state | Static fields (`PUTSTATIC`/`GETSTATIC`) | MnM handler splitting |
+| Methods >64KB split automatically | Chunked fetch with nested if/else dispatch | Triple chain with 9,610 MnM instructions |
+| Read any program from stdin | Shared Scanner (reuse instead of `new` per read) | Sierpinski stdin delivery was 26 minutes |
+| Large programs don't bloat main | Zero-init skip for static fields | 10,000 field declarations exceeded 64KB |
+| Correct tape sizing | Simulate BF execution, not static `>` `<` counting | Sierpinski rendered empty (tape too small) |
+
+Without the MnM work: no stdin input, no Sierpinski, no scaling, no programs beyond ~50 vars. Each fix made the BF interpreter more *capable*, not more *fast*.
 
 ### Benchmark: `bf_vm` vs Native C Interpreter
 
