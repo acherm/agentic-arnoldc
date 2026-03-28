@@ -123,6 +123,25 @@ def build():
     emit("DO IT NOW tapeR dp")
     emit()
 
+    # ── Helper: 8-bit cell wrapping ─────────────────────────────
+    # BF cells are 0-255. After + or -, wrap: ((val % 256) + 256) % 256
+    # ArnoldC's I LET HIM GO is Java remainder (can be negative),
+    # so we add 256 first to ensure positive, then mod again.
+    def emit_wrap256():
+        """Wrap curVal to 0-255 range."""
+        emit("GET TO THE CHOPPER curVal")
+        emit("HERE IS MY INVITATION curVal")
+        emit("I LET HIM GO 256")
+        emit("ENOUGH TALK")
+        emit("GET TO THE CHOPPER curVal")
+        emit("HERE IS MY INVITATION curVal")
+        emit("GET UP 256")
+        emit("ENOUGH TALK")
+        emit("GET TO THE CHOPPER curVal")
+        emit("HERE IS MY INVITATION curVal")
+        emit("I LET HIM GO 256")
+        emit("ENOUGH TALK")
+
     # ── + (inst == 3): increment cell ──────────────────────────
     emit("GET TO THE CHOPPER isInst")
     emit("HERE IS MY INVITATION inst")
@@ -133,6 +152,7 @@ def build():
     emit("HERE IS MY INVITATION curVal")
     emit("GET UP 1")
     emit("ENOUGH TALK")
+    emit_wrap256()
     emit("DO IT NOW tapeW dp curVal")
     emit_end_if()
     emit()
@@ -147,6 +167,7 @@ def build():
     emit("HERE IS MY INVITATION curVal")
     emit("GET DOWN 1")
     emit("ENOUGH TALK")
+    emit_wrap256()
     emit("DO IT NOW tapeW dp curVal")
     emit_end_if()
     emit()

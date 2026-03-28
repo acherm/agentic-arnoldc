@@ -9,8 +9,8 @@
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PATCHED_JAR="$SCRIPT_DIR/../../ArnoldC-patched.jar"
 
-# Default: standard starting position
-FEN="${1:-rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR}"
+# Default: standard starting position (full FEN with all 6 fields required)
+FEN="${1:-rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1}"
 
 # Compile if needed
 if [ ! -f "$SCRIPT_DIR/bf_vm_chess.class" ]; then
