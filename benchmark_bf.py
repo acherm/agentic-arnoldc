@@ -187,8 +187,38 @@ BENCHMARK_CASES = [
     "print_ABCDEFG", "powers_of_2",
 ]
 
+
+# ── Path "orig": the pre-compiled brainfuck.arnoldc in the repo ─────────
+
+def run_path_orig(bf_source):
+    """Run the original brainfuck.arnoldc (only works for +++[>++<-]>.)."""
+    bf_clean = ''.join(c for c in bf_source if c in ENCODING)
+    # The repo's brainfuck.arnoldc has +++[>++<-]>. hardcoded
+    if bf_clean != '+++[>++<-]>.':
+        return None, None  # only works for this one program
+    class_path = os.path.join(PROJECT_DIR)
+    if not os.path.exists(os.path.join(class_path, "brainfuck.class")):
+        # Compile it
+        subprocess.run(["java", "-jar", ORIGINAL_JAR, "brainfuck.arnoldc"],
+                       capture_output=True, cwd=PROJECT_DIR)
+    t0 = time.time()
+    r = subprocess.run(["java", "brainfuck"], capture_output=True, text=True,
+                       cwd=class_path, timeout=TIMEOUT)
+    elapsed = time.time() - t0
+    if r.returncode != 0:
+        return None, None
+    lines = r.stdout.strip().split('\n')
+    try:
+        sep = lines.index('---')
+        out = [int(l) for l in lines[:sep] if l.strip()]
+    except ValueError:
+        out = [int(l) for l in lines if l.strip() and l.strip().lstrip('-').isdigit()]
+    return out, elapsed
+
+
 PATHS = [
     ("Path 0: ref bf",      run_path0),
+    ("Original: arnoldc",   run_path_orig),
     ("Path 1: arnoldc(hc)", run_path1),
     ("Path 2: compiler 3x", run_path2),
     ("Path 3: bf_vm",       run_path3),
@@ -233,12 +263,13 @@ def main():
 
     print()
     print("Legend:")
-    print("  Path 0: Reference brainfuck interpreter (native C)")
-    print("  Path 1: brainfuck.arnoldc — hardcoded BF program, original compiler")
-    print("  Path 2: Compiler triple chain — Python-generated ArnoldC→MnM→BF")
-    print("  Path 3: bf_vm.arnoldc — direct BF interpreter, reads BF from stdin")
-    print("  Path 4: True triple chain — mnm_vm reads MnM BF interpreter from stdin")
-    print("  — = not supported (program too large or compilation failed)")
+    print("  Path 0:    Reference brainfuck interpreter (native C)")
+    print("  Original:  brainfuck.arnoldc — the pre-compiled repo artifact (+++[>++<-]>. only)")
+    print("  Path 1:    brainfuck.arnoldc — regenerated per test, hardcoded BF, original compiler")
+    print("  Path 2:    Compiler triple chain — Python-generated ArnoldC→MnM→BF")
+    print("  Path 3:    bf_vm.arnoldc — direct BF interpreter, reads BF from stdin")
+    print("  Path 4:    True triple chain — mnm_vm reads MnM BF interpreter from stdin")
+    print("  — = not supported (wrong program / too large / compilation failed)")
 
 
 if __name__ == "__main__":
