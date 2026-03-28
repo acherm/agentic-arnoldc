@@ -187,6 +187,22 @@ def build():
     emit_end_if()
     emit()
 
+    # ── , (inst == 6): read input into cell ─────────────────────
+    # Reads one integer from stdin (shared Scanner) and stores in tape[dp].
+    # Input protocol: after the BF program integers, any remaining stdin
+    # values are consumed by , instructions during execution.
+    emit("GET TO THE CHOPPER isInst")
+    emit("HERE IS MY INVITATION inst")
+    emit("YOU ARE NOT YOU YOU ARE ME 6")
+    emit("ENOUGH TALK")
+    emit("BECAUSE I'M GOING TO SAY PLEASE isInst")
+    emit("GET YOUR ASS TO MARS a")
+    emit("DO IT NOW")
+    emit("I WANT TO ASK YOU A BUNCH OF QUESTIONS AND I WANT TO HAVE THEM ANSWERED IMMEDIATELY")
+    emit("DO IT NOW tapeW dp a")
+    emit_end_if()
+    emit()
+
     # ── [ (inst == 7): forward scan if zero ────────────────────
     # Compute: isInst = (inst == 7) AND (curVal == 0)
     emit("GET TO THE CHOPPER isInst")
