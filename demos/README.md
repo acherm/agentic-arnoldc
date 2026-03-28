@@ -4,6 +4,7 @@ Pre-built artifacts demonstrating ArnoldC interpreters at work. Each subfolder i
 
 | Demo | What it shows | Key artifact |
 |------|--------------|-------------|
+| [`chessboard/`](chessboard/) | **ArnoldC renders a chess position** — 1,092-instruction BF program reads FEN via `,` and outputs ASCII art | `bf_vm_chess.arnoldc` (23,292 lines) |
 | [`triplechain/`](triplechain/) | **ArnoldC → MnM → Brainfuck** — three interpreters deep, including a true single-file interpreter that reads MnM from stdin | `mnm_vm_bf.arnoldc` (26,757 lines) |
 | [`mnm-standalone/`](mnm-standalone/) | MnM programs (hello world, factorial, fizzbuzz) compiled to ArnoldC via the generator | `mnm_factorial.arnoldc` (1,979 lines) |
 | [`mnm-compiler/`](mnm-compiler/) | Same MnM programs showing source + compiled output side by side | `factorial.mnm` → `mnm_factorial.arnoldc` |
