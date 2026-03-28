@@ -30,5 +30,16 @@ print(len(codes), ' '.join(str(c) for c in codes), ' '.join(str(c) for c in fen_
 " "$FEN" | java -cp "$SCRIPT_DIR" bf_vm_chess 2>&1 | python3 -c "
 import sys
 vals = [int(l.strip()) for l in sys.stdin if l.strip()]
-print(''.join(chr(v) if 0 <= v < 128 else ' ' for v in vals))
+# ArnoldC uses 32-bit signed ints; BF expects 8-bit unsigned.
+# Map to 0-255 range, then to characters.
+# Box-drawing: 252='+' 254='-' (replacing extended ASCII with ASCII equivalents)
+REMAP = {252: ord('+'), 254: ord('-'), -4: ord('+'), -2: ord('-')}
+chars = []
+for v in vals:
+    v = REMAP.get(v, v % 256 if v < 0 else v)
+    if 0 <= v < 128:
+        chars.append(chr(v))
+    else:
+        chars.append(chr(v % 256) if 32 <= v % 256 < 127 else '+')
+print(''.join(chars))
 "
