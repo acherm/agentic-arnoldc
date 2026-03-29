@@ -673,7 +673,7 @@ def build():
     # D.  METHODS (all access static fields via GETSTATIC/PUTSTATIC)
     # ═════════════════════════════════════════════════════════════════════
 
-    CHUNK = 2000  # max entries per method (~50KB bytecode, under 64KB)
+    CHUNK = 1500  # max entries per method (~45KB bytecode, under 64KB with array-backed vars)
 
     def emit_read_chunk(name, prefix, start, end):
         """Non-void sub-method for a range of entries."""
