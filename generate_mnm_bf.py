@@ -43,8 +43,14 @@ def estimate_tape_size(bf_source):
     return max(mx + 2, 4)
 
 
-def generate_mnm_bf(bf_source, tape_size=None):
+def generate_mnm_bf(bf_source, tape_size=None, bf_input=None):
     """Generate MnM source + sidecar for a BF interpreter.
+
+    Args:
+        bf_source: BF source code.
+        tape_size: Number of tape cells (auto-estimated if None).
+        bf_input:  List of integer values for BF , (input) instructions.
+                   These are placed in the MnM input queue.
 
     Returns (mnm_source, sidecar_dict, info_dict).
     """
@@ -52,6 +58,8 @@ def generate_mnm_bf(bf_source, tape_size=None):
     prog_len = len(bf_encoded)
     if tape_size is None:
         tape_size = estimate_tape_size(bf_source)
+    if bf_input is None:
+        bf_input = []
 
     PROG_BASE = 6       # program starts at var 6
     TAPE_BASE = PROG_BASE + max(prog_len, 1)
@@ -185,6 +193,7 @@ def generate_mnm_bf(bf_source, tape_size=None):
     LBL_RIGHT = fresh_label()      # handler: >
     LBL_LEFT = fresh_label()       # handler: <
     LBL_DOT = fresh_label()        # handler: .
+    LBL_COMMA = fresh_label()      # handler: ,
     LBL_OPEN = fresh_label()       # handler: [
     LBL_CLOSE = fresh_label()      # handler: ]
     LBL_SKIP_INST = fresh_label()  # skip unknown instruction
@@ -252,8 +261,19 @@ def generate_mnm_bf(bf_source, tape_size=None):
     emit_print()
     emit_jmp(LBL_NEXT)
 
-    # [ (inst == 7)
+    # , (inst == 6): read from MnM input queue into tape[dp]
     emit_label(LBL_DOT)
+    emit_load(4); emit_push(6); emit_eq(); emit_jz(LBL_COMMA)
+    # MnM READ_INT queue 0 → pushes value onto MnM stack
+    emit("OOO O")
+    emit_store(5)   # pop into cur_val (var 5)
+    # Write cur_val to tape[dp]
+    emit_load(1)    # push dp
+    emit_write_array(TAPE_BASE, tape_size, 5)
+    emit_jmp(LBL_NEXT)
+
+    # [ (inst == 7)
+    emit_label(LBL_COMMA)
     emit_load(4); emit_push(7); emit_eq(); emit_jz(LBL_OPEN)
     # Read tape[dp]
     emit_load(1)
@@ -336,7 +356,7 @@ def generate_mnm_bf(bf_source, tape_size=None):
     sidecar = {
         "strings": [],
         "variables": variables,
-        "inputs": {"int": [], "str": []},
+        "inputs": {"int": [bf_input] if bf_input else [], "str": []},
     }
     info = {
         "bf_source": bf_source,
