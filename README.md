@@ -446,12 +446,15 @@ Path 4 ran Sierpinski because the MnM BF interpreter was **tailored per BF progr
 | **BF `,` input** | No | Yes |
 | **Truly generic?** | MnM varies per BF | Everything fixed |
 
-Could we increase Path 6's limits to fit Sierpinski? PROG_SLOTS=130 + TAPE_SLOTS=140 = 270 MnM variables → ~15K MnM instructions → ~30K ArnoldC fields → **~90K JVM constant pool entries** (limit: 65,535). The constant pool is the hard wall.
+Could we increase Path 6's limits to fit Sierpinski? We tried. The actual wall is **not** the JVM constant pool (only 3,415 entries used — the ~90K estimate was wrong). It's an **ASM 3.3.1 bytecode generation bug**: `Invalid this class index` when the class file has too many fields/methods. Binary search found the exact boundary:
 
-| Path 6 sizing | PROG | TAPE | MnM vars | CP entries | Fits? | Hello World? | Sierpinski? |
-|------|---:|---:|---:|---:|:---:|:---:|:---:|
-| Current | 120 | 20 | 146 | ~28K | Yes | Yes | No |
-| Sierpinski-sized | 130 | 140 | 276 | ~90K | **No** | Yes | Would, but CP overflow |
+| Path 6 sizing | PROG | TAPE | MnM vars | ArnoldC lines | Works? | Sierpinski? |
+|------|---:|---:|---:|------:|:---:|:---:|
+| Default | 120 | 20 | 146 | 290K | Yes | No |
+| Max working | 125 | 122 | 263 | 438K | Yes | No (needs 132 tape) |
+| Sierpinski-min | 125 | 133 | 264 | 462K | **ASM bug** | Would fit, but crash |
+
+**10 tape cells short.** Fixing this would require upgrading ASM from 3.3.1 (2007) to a modern version — a deeper change to the ArnoldC compiler's bytecode library.
 
 ### What the MnM detour actually contributed
 
