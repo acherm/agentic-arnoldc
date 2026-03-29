@@ -80,6 +80,28 @@ The shared Scanner reads them sequentially — program data first, then the BF `
 | Tape cells used | 37 |
 | ArnoldC execution time | ~4.3 seconds |
 
+## Visual conventions
+
+The `chessboard.b` BF program uses rendering conventions that differ from traditional printed chess diagrams:
+
+| | Traditional chess diagrams | `chessboard.b` |
+|---|---|---|
+| **White pieces** | Filled/solid silhouettes | Empty (spaces inside: `[ ]`, `( )`) |
+| **Black pieces** | Outlined/hollow | Filled (`[#]`, `(#)`, `{#}`) |
+| **Dark squares** | Shaded | `:::::::` (colons) |
+| **Light squares** | White | Spaces |
+
+This can be visually confusing: the filled (`#`) pieces at the top *look* like the solid white pieces from printed diagrams, but they're actually black. The board position is correct — verified byte-identical against a Python BF simulation with perfect 8-bit semantics.
+
+**Important**: the FEN must include all 6 fields (not just piece placement):
+```
+rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
+                                              ^^^^^^^^^^^^^^
+                                              required for full board
+```
+
+Without ` w KQkq - 0 1`, only 7 of 8 ranks are rendered.
+
 ## Regenerating
 
 ```bash
