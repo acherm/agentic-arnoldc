@@ -882,7 +882,7 @@ The project started with 25 ArnoldC programming challenges and evolved into a de
 
 Path 6 is the purest: three fixed interpreters (ArnoldC + MnM + BF), any BF program, any BF input, no Python at runtime. The cost is smaller limits (120 BF instructions, 20 tape cells) imposed by the JVM constant pool ceiling. Path 3 remains the most capable (Sierpinski, chessboard, rot13) but skips the MnM layer.
 
-### The seven compiler patches
+### The nine compiler patches
 
 | # | Fix | What it solved | Discovered while... |
 |---|-----|---------------|-------------------|
@@ -892,20 +892,18 @@ Path 6 is the purest: three fixed interpreters (ArnoldC + MnM + BF), any BF prog
 | 4 | Zero-init skip | 10,000 field inits exceed 64KB | Large program slots |
 | 5 | Nested if/else dispatch | Chunk boundary overwrites | Programs > 2000 instructions |
 | 6 | 8-bit cell wrapping | BF programs relying on byte overflow | Chessboard missing rank |
-| 7 | ASM 3.3.1 → 9.7 upgrade | Silent class corruption → proper `ClassTooLargeException` | Sierpinski Path 6 attempt |
+| 7 | ASM 3.3.1 → 9.7 upgrade | Silent class corruption → proper errors | Sierpinski Path 6 attempt |
+| 8 | Array-backed variables | 65K constant pool limit | Chessboard Path 6 (22K+ fields → 1 field) |
+| 9 | NumberNode LDC fix | SIPUSH overflow at indices > 32,767 | Chessboard VM silent wrong results |
 
-### The hard wall: JVM constant pool (65,535)
-
-After fixing seven compiler issues, the remaining limit is the JVM specification itself. Each ArnoldC static field requires ~3 constant pool entries. The `constant_pool_count` field in the class file is `u2` (16-bit unsigned), capping it at 65,535. This limits Path 6 to ~263 MnM variables / ~122 BF tape cells — 10 short of Sierpinski's 132.
-
-No compiler patch can fix this. The only solution would be splitting across multiple JVM class files, which ArnoldC doesn't support.
+Patches 8 and 9 broke through what appeared to be a hard JVM spec wall. The constant pool limit (65,535) blocked Sierpinski for patches 1-7 because each variable was a separate static field (~3 CP entries each). Patch 8 stores all variables in a single `static int[]` array — one field, trivial CP usage. Patch 9 fixes `NumberNode` to use `LDC` instead of `SIPUSH` for values > 32,767, enabling array indices and comparisons at scale.
 
 ### Remaining limitations
 
+- **Performance at scale**: the triple chain uses O(N) comparison chains for every array access in MnM. A chessboard (1,092 BF, 344K BF steps) through Path 6 requires ~4 trillion comparisons — estimated 20+ hours. Simpler programs (Sierpinski, Hello World, multiply) complete in seconds to minutes.
 - **No character output**: `TALK TO THE HAND` prints integers, not characters. Output needs post-processing to decode ASCII.
 - **No MnM strings**: the true MnM interpreter (`mnm_vm`) can't do PRINT\_STR, CONCAT, etc. The compiler approach supports them.
-- **Fixed sizes**: `bf_vm` defaults to 200 program slots / 150 tape cells (configurable via `build_bf_vm.py`).
-- **Performance**: the triple chain is ~2,400× slower than a native C BF interpreter. The direct `bf_vm` is ~29× slower (dominated by JVM startup).
+- **Fixed sizes**: `bf_vm` defaults to 200 program slots / 150 tape cells (configurable via `build_bf_vm.py`). Path 6 limits depend on the MnM BF interpreter sizing.
 - **Interactive programs**: `,` works for pre-provided input, but true interactive I/O (reading keystrokes mid-execution) isn't practical through piped stdin.
 
 ## License
