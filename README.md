@@ -880,7 +880,43 @@ The project started with 25 ArnoldC programming challenges and evolved into a de
 | **5** | Triple chain + BF input | No | **Yes** | No | 2 (BF compiled into MnM) |
 | **6** | **Pure triple chain** | **Yes** | **Yes** | **No** | **3 (all fixed)** |
 
-Path 6 is the purest: three fixed interpreters (ArnoldC + MnM + BF), any BF program, any BF input, no Python at runtime. The cost is smaller limits (120 BF instructions, 20 tape cells) imposed by the JVM constant pool ceiling. Path 3 remains the most capable (Sierpinski, chessboard, rot13) but skips the MnM layer.
+Path 6 is the purest: three fixed interpreters (ArnoldC + MnM + BF), any BF program, any BF input, no Python at runtime. With patches 8-9 (array-backed variables), the constant pool wall is gone — the limit is now purely performance. Path 3 remains the most capable (Sierpinski in 0.2s, chessboard in 4s) but skips the MnM layer.
+
+### Anatomy of the triple chain
+
+Each level of interpretation expands code size by roughly an order of magnitude. The expansion is driven by **comparison chains**: since neither MnM nor ArnoldC has arrays, every "array access" becomes a linear if/else scan over individual variables.
+
+**Sierpinski triangle** (Path 6, verified — 2 rows in 10 minutes):
+
+```
+Level 3: Brainfuck       124 characters        (sierpinski.b)
+Level 2: MnM Lang         11,122 instructions   (generic BF interpreter, 264 variables)
+Level 1: ArnoldC         466,187 lines          (generic MnM interpreter)
+Level 0: JVM             ~5 MB bytecode
+         → 319,294 BF steps → 1,552 output chars → Sierpinski triangle
+```
+
+**Chessboard** (Path 6, compiles and runs — multiply 6×7=42 verified in 5 min, full board 20+ hours):
+
+```
+Level 3: Brainfuck       1,092 characters       (chessboard.b)
+Level 2: MnM Lang         33,382 instructions   (generic BF interpreter, 1,150 variables)
+Level 1: ArnoldC       1,385,443 lines          (generic MnM interpreter)
+Level 0: JVM             ~17 MB bytecode
+         → 344,005 BF steps → 2,706 output chars → ASCII art chessboard
+```
+
+**Why chessboard is 100× slower than Sierpinski** despite similar BF step counts:
+
+|  | Sierpinski | Chessboard | Ratio |
+|--|------:|------:|------:|
+| BF instructions | 124 | 1,092 | 9× |
+| BF steps | 319,294 | 344,005 | 1.1× |
+| MnM instructions | 11,122 | 33,382 | **3×** |
+| MnM variables | 264 | 1,150 | 4× |
+| ArnoldC lines | 466,187 | 1,385,443 | 3× |
+
+The 3× ratio in MnM instructions **compounds quadratically**: each MnM instruction scans the fetchOp table (also 3× larger), so total comparisons scale as 3× × 3× = **9×**. Combined with the 1.1× more BF steps, chessboard needs ~10× more computation than Sierpinski. In practice it's even worse because the larger comparison chains are less cache-friendly.
 
 ### The nine compiler patches
 
