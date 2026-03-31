@@ -918,6 +918,44 @@ Level 0: JVM             ~17 MB bytecode
 
 The 3× ratio in MnM instructions **compounds quadratically**: each MnM instruction scans the fetchOp table (also 3× larger), so total comparisons scale as 3× × 3× = **9×**. Combined with the 1.1× more BF steps, chessboard needs ~10× more computation than Sierpinski. In practice it's even worse because the larger comparison chains are less cache-friendly.
 
+### Parameterized memory: why the ArnoldC program must be sized
+
+The ArnoldC interpreter (`mnm_vm`) is **generic** — the same opcode dispatch logic, main loop, and read/write methods regardless of what MnM program it runs. But it must be **parameterized at build time** because ArnoldC has no dynamic memory allocation. Every "array" is a fixed-length if/else comparison chain:
+
+```bash
+python3 build_mnm_vm.py output.arnoldc \
+    --prog 11300    # MnM instruction slots
+    --vars 280      # MnM variable slots
+    --stack 30      # MnM operand stack depth
+    --iq 200        # MnM input queue (BF opcodes + BF input)
+```
+
+These parameters don't change the logic — they control the **length of the comparison chains** in the generated methods:
+
+```
+fetchOp(idx):  if idx==0 return po0; if idx==1 return po1; ... if idx==11299 return po11299;
+varR(idx):     if idx==0 return v0;  if idx==1 return v1;  ... if idx==279 return v279;
+stackR(idx):   if idx==0 return s0;  if idx==1 return s1;  ... if idx==29 return s29;
+```
+
+The MnM BF interpreter has its own parameters for the same reason — **comparison chains at two levels**:
+
+```bash
+# MnM level: how much "memory" the BF interpreter has
+PROG_SLOTS = 125    # BF instruction slots  → comparison chain in MnM for program fetch
+TAPE_SLOTS = 133    # BF tape cells         → comparison chain in MnM for tape access
+```
+
+The trade-off is direct: **bigger parameters → longer chains → larger file → slower execution**.
+
+| Target BF program | MnM sizing | ArnoldC sizing | ArnoldC lines | Runtime |
+|-------------------|-----------|---------------|------:|--------|
+| Hello World (111 BF, 5 tape) | PROG=120, TAPE=20 | --prog 5000 --vars 160 | 290K | seconds |
+| Sierpinski (124 BF, 132 tape) | PROG=125, TAPE=133 | --prog 11300 --vars 280 | 466K | minutes |
+| Chessboard (1092 BF, 37 tape) | PROG=1102, TAPE=42 | --prog 33600 --vars 1180 | 1.4M | hours |
+
+A BF program using 10 instructions and 3 tape cells could run through a ~50K-line ArnoldC interpreter in milliseconds. The performance scales with the **product** of parameters across both levels — which is why ArnoldC has no arrays is the single constraint that shapes everything.
+
 ### The nine compiler patches
 
 | # | Fix | What it solved | Discovered while... |
